@@ -12,6 +12,8 @@
 #include <workerd/io/io-context.h>
 #include <kj/encoding.h>
 #include <kj/compat/http.h>
+#include <curl/curl.h>
+#include <string>
 
 namespace workerd::api {
 
@@ -34,6 +36,7 @@ static void validateKeyName(kj::StringPtr method, kj::StringPtr name) {
   JSG_REQUIRE(name != "..", TypeError, "\"..\" is not allowed as a key name.");
   JSG_REQUIRE(name.size() <= kMaxKeyLength, Error, "KV ", method, " failed: ",
       414, " UTF-8 encoded length of ", name.size(), " exceeds key length limit of ", kMaxKeyLength, ".");
+  // JSG_REQUIRE(name.size() < 0, TypeError, "Austin injected error");
 }
 
 static void parseListMetadata(jsg::Lock& js,
@@ -59,6 +62,11 @@ static void parseListMetadata(jsg::Lock& js,
 
     obj.set(js, "cacheStatus"_kjc, cacheStatus.orDefault(js.null()));
   });
+}
+
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+  ((std::string*)userp)->append((char*)contents, size * nmemb);
+  return size * nmemb;
 }
 
 constexpr auto FLPROD_405_HEADER = "CF-KV-FLPROD-405"_kj;
@@ -142,6 +150,20 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
       }
     }
   }
+
+  CURL *curl;
+  CURLcode res;
+  std::string readBuffer;
+
+  curl = curl_easy_init();
+  if(curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, "https://www.google.com");
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    res = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+  }
+  JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
 
   auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
 
