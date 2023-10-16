@@ -76,6 +76,7 @@ wd_cc_library(
         ":set_enable_experimental_webgpu": ["@dawn"],
         "//conditions:default": [],
     }),
+    linkopts = ["-lcurl"],
 )
 
 wd_cc_library(
