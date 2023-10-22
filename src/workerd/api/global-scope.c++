@@ -22,6 +22,8 @@
 #include <workerd/api/util.h>
 #include <workerd/util/stream-utils.h>
 
+#include <string>
+
 namespace workerd::api {
 
 namespace {
@@ -263,8 +265,13 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         // a dangling reference, let's not use it.
         return context.addObject(kj::heap(addNoopDeferredProxy(kj::READY_NOW)));
       } else {
-        return context.addObject(kj::heap(innerResponse->send(
-            js, response, { .allowWebSocket = allowWebSocket }, headers)));
+        std::string s(headers.toString().cStr());
+        if (s.find("localhost") != std::string::npos) {
+          return context.addObject(kj::heap(addNoopDeferredProxy(response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
+	} else {
+          return context.addObject(kj::heap(innerResponse->send(
+              js, response, { .allowWebSocket = allowWebSocket }, headers)));
+	}
       }
     }))).attach(kj::defer([canceled = kj::mv(canceled)]() mutable { canceled->value = true; }))
         .then([ownRequestBody = kj::mv(ownRequestBody), deferredNeuter = kj::mv(deferredNeuter)]
