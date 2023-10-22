@@ -83,6 +83,7 @@ void WorkerEntrypoint::init(
     kj::Maybe<kj::Own<WorkerTracer>> workerTracer) {
   // We need to construct the IoContext -- unless this is an actor and it already has a
   // IoContext, in which case we reuse it.
+  KJ_LOG(ERROR, "worker entrypoint init", worker);
 
   auto newContext = [&]() {
     auto actorRef = actor.map([](kj::Own<Worker::Actor>& ptr) -> Worker::Actor& {
@@ -120,7 +121,7 @@ kj::Promise<void> WorkerEntrypoint::request(
   this->incomingRequest = kj::none;
   incomingRequest->delivered();
   auto& context = incomingRequest->getContext();
-
+  KJ_LOG(ERROR, "worker entrypoint request start", method, url, headers);
   auto wrappedResponse = kj::heap<ResponseSentTracker>(response);
 
   bool isActor = context.getActor() != kj::none;

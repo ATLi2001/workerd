@@ -205,6 +205,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 
   if (useDefaultHandling) {
     // No one called respondWith() or preventDefault(). Go directly to subrequest.
+    KJ_LOG(ERROR, "Austin inject global scope usedDefaultHandling");
 
     if (ioContext.taskCount() > tasksBefore) {
       lock.logWarning(
@@ -235,6 +236,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
     }
   } else KJ_IF_SOME(promise, event->getResponsePromise(lock)) {
     auto body2 = kj::addRef(*ownRequestBody);
+    KJ_LOG(ERROR, "global scope getResponsePromise", method, url, headers);
 
     // HACK: If the client disconnects, the `response` reference is no longer valid. But our
     //   promise resolves in JavaScript space, so won't be canceled. So we need to track
@@ -253,6 +255,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             (jsg::Lock& js, jsg::Ref<Response> innerResponse) mutable
             -> IoOwn<kj::Promise<DeferredProxy<void>>> {
       auto& context = IoContext::current();
+      KJ_LOG(ERROR, "ioContext.addFunctor()", headers);
       // Drop our fetch_handler span now that the promise has resolved.
       span = kj::none;
       if (canceled->value) {
