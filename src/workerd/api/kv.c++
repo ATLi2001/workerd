@@ -127,7 +127,9 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   validateKeyName("GET", name);
 
   auto& context = IoContext::current();
-  KJ_LOG(ERROR, "kv get js lock", js.global());
+
+  v8::Local<v8::Object> bindingsScope = js.global().getHandle(js)->Global();
+  KJ_LOG(ERROR, "js.v8Get", js.v8Get(bindingsScope, "jsKey"));
 
   kj::Url url;
   url.scheme = kj::str("https");
@@ -335,6 +337,9 @@ jsg::Promise<void> KvNamespace::put(
     validateKeyName("PUT", name);
 
     auto& context = IoContext::current();
+
+    v8::Local<v8::Object> bindingsScope = js.global().getHandle(js)->Global();
+    js.v8Set(bindingsScope, "jsKey", "jsValue");
 
     kj::Url url;
     url.scheme = kj::str("https");

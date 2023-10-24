@@ -11,4 +11,22 @@
         "BAZEL_VC" : "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC",
         "BAZEL_WINSDK_FULL_VERSION" : "10.0.22000.0",
     },
+    "files.associations": {
+        "array": "cpp",
+        "compare": "cpp",
+        "format": "cpp",
+        "functional": "cpp",
+        "memory": "cpp",
+        "ratio": "cpp",
+        "regex": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "xmemory": "cpp",
+        "xstring": "cpp",
+        "xtr1common": "cpp",
+        "xutility": "cpp",
+        "system_error": "cpp",
+        "mutex": "cpp"
+    },
 }
