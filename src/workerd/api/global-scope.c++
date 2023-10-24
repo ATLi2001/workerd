@@ -207,7 +207,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 
   if (useDefaultHandling) {
     // No one called respondWith() or preventDefault(). Go directly to subrequest.
-    KJ_LOG(ERROR, "Austin inject global scope usedDefaultHandling");
 
     if (ioContext.taskCount() > tasksBefore) {
       lock.logWarning(

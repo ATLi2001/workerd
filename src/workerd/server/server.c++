@@ -2308,7 +2308,6 @@ kj::Own<Server::Service> Server::makeService(
     kj::HttpHeaderTable::Builder& headerTableBuilder,
     capnp::List<config::Extension>::Reader extensions) {
   kj::StringPtr name = conf.getName();
-  KJ_LOG(ERROR, "server make service", name);
 
   switch (conf.which()) {
     case config::Service::UNSPECIFIED:
@@ -2768,7 +2767,6 @@ kj::Promise<void> Server::listenOnSockets(config::Config::Reader config,
                                           kj::ForkedPromise<void>& forkedDrainWhen) {
   // ---------------------------------------------------------------------------
   // Start sockets
-  KJ_LOG(ERROR, "Austin injected listenOnSockers");
   for (auto sock: config.getSockets()) {
     kj::StringPtr name = sock.getName();
     kj::StringPtr addrStr = nullptr;
@@ -2823,7 +2821,6 @@ kj::Promise<void> Server::listenOnSockets(config::Config::Reader config,
     continue;
 
   validSocket:
-    KJ_LOG(ERROR, "Austin inject validSocket");
     using PromisedReceived = kj::Promise<kj::Own<kj::ConnectionReceiver>>;
     PromisedReceived listener = nullptr;
     KJ_IF_SOME(l, listenerOverride) {
@@ -2866,8 +2863,6 @@ kj::Promise<void> Server::listenOnSockets(config::Config::Reader config,
     tasks.add(handle(kj::mv(listener)).exclusiveJoin(forkedDrainWhen.addBranch()));
   }
 
-  KJ_LOG(ERROR, "Austin inject listenOnSockets mid");
-
   for (auto& unmatched: socketOverrides) {
     reportConfigError(kj::str(
         "Config did not define any socket named \"", unmatched.key, "\" to match the override "
@@ -2887,7 +2882,6 @@ kj::Promise<void> Server::listenOnSockets(config::Config::Reader config,
   }
 
   co_await tasks.onEmpty();
-  KJ_LOG(ERROR, "Austin inject listenOnSockets end");
 
   // Give a chance for any errors to bubble up before we return success. In particular
   // Server::taskFailed() fulfills `fatalFulfiller`, which causes the server to exit with an error.

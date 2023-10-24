@@ -127,6 +127,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   validateKeyName("GET", name);
 
   auto& context = IoContext::current();
+  KJ_LOG(ERROR, "kv get js lock", js.global());
 
   kj::Url url;
   url.scheme = kj::str("https");
