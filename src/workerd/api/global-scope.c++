@@ -266,11 +266,14 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
       } else {
         std::string s(headers.toString().cStr());
         if (s.find("localhost") != std::string::npos) {
+          jsg::JsObject g = js.global();
+          kj::String val = g.getPrivate(js, "jsKey").toJson(js);
+          KJ_LOG(ERROR, "ioContext.addFunctor() js.global().getPrivate()", val);
           return context.addObject(kj::heap(addNoopDeferredProxy(response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
-	} else {
+	      } else {
           return context.addObject(kj::heap(innerResponse->send(
               js, response, { .allowWebSocket = allowWebSocket }, headers)));
-	}
+	      }
       }
     }))).attach(kj::defer([canceled = kj::mv(canceled)]() mutable { canceled->value = true; }))
         .then([ownRequestBody = kj::mv(ownRequestBody), deferredNeuter = kj::mv(deferredNeuter)]
