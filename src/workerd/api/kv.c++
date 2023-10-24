@@ -129,7 +129,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   auto& context = IoContext::current();
 
   jsg::JsObject g = js.global();
-  kj::String val = g.getPrivate(js, "jsKey").toString(js);
+  kj::String val = g.getPrivate(js, "jsKey").toJson(js);
   KJ_LOG(ERROR, "js.global().getPrivate()", val);
 
   kj::Url url;
