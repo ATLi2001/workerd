@@ -129,7 +129,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   auto& context = IoContext::current();
 
   jsg::JsObject g = js.global();
-  KJ_LOG(ERROR, g.getPrivate(js, "jsKey"));
+  KJ_LOG(ERROR, g.getPrivate(js, "jsKey").isUndefined());
 
   kj::Url url;
   url.scheme = kj::str("https");
