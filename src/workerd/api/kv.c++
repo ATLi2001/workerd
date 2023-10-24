@@ -128,8 +128,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
   auto& context = IoContext::current();
 
-  v8::Local<v8::Object> bindingsScope = js.global().getHandle(js)->Global();
-  KJ_LOG(ERROR, "js.v8Get", js.v8Get(bindingsScope, "jsKey"));
+  jsg::JsObject g = js.global();
+  KJ_LOG(ERROR, g.getPrivate(js, "jsKey"));
 
   kj::Url url;
   url.scheme = kj::str("https");
@@ -338,8 +338,12 @@ jsg::Promise<void> KvNamespace::put(
 
     auto& context = IoContext::current();
 
-    v8::Local<v8::Object> bindingsScope = js.global().getHandle(js)->Global();
-    js.v8Set(bindingsScope, "jsKey", "jsValue");
+    jsg::JsObject g = js.global();
+    constexpr kj::StringPtr kjValue = R"DATA({
+      "example": true
+    })DATA"_kjc;
+    jsg::JsValue v = jsg::JsValue::fromJson(js, kjValue);
+    g.setPrivate(js, "jsKey", v);
 
     kj::Url url;
     url.scheme = kj::str("https");
