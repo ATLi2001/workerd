@@ -66,17 +66,17 @@ static void parseListMetadata(jsg::Lock& js,
   });
 }
 
-static struct response {
+struct response {
   char *memory;
   size_t size;
-}
+};
 
 static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 
   size_t realsize = size * nmemb;
   struct response *mem = (struct response *)userp;
 
-  char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+  char *ptr = (char *)realloc(mem->memory, mem->size + realsize + 1);
 
   if(!ptr) {
     // out of memory
@@ -92,7 +92,7 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   return realsize;
 }
 
-static void makeRemoteGet(std::string url, struct response& readBuffer) {
+static void makeRemoteGet(char *url, struct response& readBuffer) {
   CURL *curl;
   CURLcode res;
   // struct response readBuffer = {.memory = malloc(0), .size = 0};
@@ -105,7 +105,7 @@ static void makeRemoteGet(std::string url, struct response& readBuffer) {
     res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
   }
-  JSG_REQUIRE(readBuffer->size() > 0, TypeError, "curl easy did not work");
+  JSG_REQUIRE(readBuffer.size > 0, TypeError, "curl easy did not work");
 }
 
 constexpr auto FLPROD_405_HEADER = "CF-KV-FLPROD-405"_kj;
@@ -194,8 +194,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
     }
   }
 
-  struct response readBuffer = {.memory = malloc(0), .size = 0};
-  makeRemoteGet("https://www.google.com", &readBuffer);
+  struct response readBuffer = {.memory = (char *)malloc(0), .size = 0};
+  makeRemoteGet("https://www.google.com", readBuffer);
   KJ_LOG(ERROR, std::string(readBuffer.memory));
 
   auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
