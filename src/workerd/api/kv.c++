@@ -156,10 +156,11 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         // }
 
       }
-      KJ_CASE_ONEOF(val, jsg::JsRef<jsg::JsValue>) {
-        KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
+      KJ_CASE_ONEOF(valRef, jsg::JsRef<jsg::JsValue>) {
+        jsg::JsValue val = valRef.getHandle(js);
+        KJ_LOG(ERROR, "getConsistencyCheck kv get result", val.toJson(js));
 
-        KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
+        KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
           jsg::JsValue version = json.get(js, "version_number");
           // compare with readBuffer version number
           KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
