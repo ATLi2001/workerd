@@ -111,7 +111,7 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
   // convert string to JsValue json (always expect a json)
-  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, "DATA(" + readBuffer + ")DATA");
+  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str("DATA(" + readBuffer + ")DATA"));
   KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
 
   // compare readBuffer version_number with result
@@ -156,7 +156,7 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         // }
 
       }
-      KJ_CASE_ONEOF(val, jsg::JsRef<jsg::JsValue>>) {
+      KJ_CASE_ONEOF(val, jsg::Ref<jsg::JsValue>>) {
         KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
 
         KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
