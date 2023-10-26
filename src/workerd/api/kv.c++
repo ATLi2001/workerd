@@ -156,7 +156,7 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         // }
 
       }
-      KJ_CASE_ONEOF(val, jsg::Ref<jsg::JsValue>>) {
+      KJ_CASE_ONEOF(val, jsg::JsRef<jsg::JsValue>>) {
         KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
 
         KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
@@ -346,7 +346,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
         (jsg::Lock& js, KvNamespace::GetResult result) mutable -> KvNamespace::GetWithMetadataResult {
 
       // place thread call here
-      std::thread t(getConsistencyCheck, js, result);
+      // std::thread t(getConsistencyCheck, js, result);
 
       kj::Maybe<jsg::JsRef<jsg::JsValue>> meta;
       KJ_IF_SOME (metaStr, maybeMeta) {
