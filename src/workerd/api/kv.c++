@@ -75,7 +75,7 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 // js global object for whether consistency check was ok
 static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
   jsg::JsObject g = js.global();
-  jsg::JsValue queueName = js.str("consistencyQueue");
+  jsg::JsValue queueName = js.strIntern("consistencyQueue");
 
   g.set(js, queueName, js.boolean(isFine));
 
@@ -91,13 +91,13 @@ static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
 }
 
 // use curl to fill out readBuffer
-static void makeRemoteGet(char *url, std::string readBuffer) {
+static void makeRemoteGet(std::string url, std::string readBuffer) {
   CURL *curl;
   CURLcode res;
 
   curl = curl_easy_init();
   if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
     res = curl_easy_perform(curl);
@@ -111,7 +111,7 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
   // convert string to JsValue json (always expect a json)
-  jsg::JsValue readBufferJs = jsg::JsValue::fromJson("DATA(" + readBuffer + ")DATA");
+  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, "DATA(" + readBuffer + ")DATA");
   KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
 
   // compare readBuffer version_number with result
@@ -148,7 +148,7 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         // }
       }
       KJ_CASE_ONEOF(text, kj::String) {
-        KJ_LOG(ERROR, "not handling string")
+        KJ_LOG(ERROR, "not handling string");
         // std::String s(readBuffer.memory);
 
         // if(s != text) {
@@ -160,13 +160,13 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
 
         KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
-          jsg::JsValue version = json.get("version_number");
+          jsg::JsValue version = json.get(js, "version_number");
           // compare with readBuffer version number
           KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
-            jsg::JsValue checkVersion = readBufferJson.get("version_number");
+            jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
             pushToJsGlobal(js, version == checkVersion);
           } else{
-            KJ_LOG(ERROR, "not json")
+            KJ_LOG(ERROR, "not json");
           }
         } else {
           KJ_LOG(ERROR, "not json");
@@ -264,9 +264,6 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
       }
     }
   }
-
-  struct response readBuffer = {.memory = (char *)malloc(0), .size = 0};
-  makeRemoteGet("https://www.google.com", readBuffer);
 
   auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
 
