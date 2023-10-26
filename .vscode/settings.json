@@ -27,6 +27,14 @@
         "xtr1common": "cpp",
         "xutility": "cpp",
         "system_error": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "xlocale": "cpp",
+        "future": "cpp",
+        "istream": "cpp",
+        "xlocmes": "cpp",
+        "xlocmon": "cpp",
+        "xlocnum": "cpp",
+        "xloctime": "cpp",
+        "set": "cpp"
     },
 }

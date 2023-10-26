@@ -265,15 +265,28 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         return context.addObject(kj::heap(addNoopDeferredProxy(kj::READY_NOW)));
       } else {
         std::string s(headers.toString().cStr());
+        // localhost in header implies this is end of chain (about to go back to user)
         if (s.find("localhost") != std::string::npos) {
           jsg::JsObject g = js.global();
-          kj::String val = g.get(js, "jsKey").toJson(js);
-          KJ_LOG(ERROR, "ioContext.addFunctor() js.global().get()", val);
-          return context.addObject(kj::heap(addNoopDeferredProxy(response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
-	      } else {
-          return context.addObject(kj::heap(innerResponse->send(
-              js, response, { .allowWebSocket = allowWebSocket }, headers)));
-	      }
+          jsg::JsValue queueName = js.str("consistencyQueue");
+          auto maybeVal = g.get(js, queueName);
+          // shouldn't be undefined but make sure
+          if(!maybeVal.isUndefined()) {
+            // expected type
+            KJ_IF_SOME(b, maybeVal.tryCast<jsg::JsBoolean>()) {
+              // if not ok, return an error
+              if(!b.value(js)) {
+                return context.addObject(kj::heap(addNoopDeferredProxy(
+                  response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
+              }
+            } else {
+              KJ_LOG(ERROR, "not a boolean");
+            }
+          }
+        }
+        // normal return
+        return context.addObject(kj::heap(innerResponse->send(
+            js, response, { .allowWebSocket = allowWebSocket }, headers)));
       }
     }))).attach(kj::defer([canceled = kj::mv(canceled)]() mutable { canceled->value = true; }))
         .then([ownRequestBody = kj::mv(ownRequestBody), deferredNeuter = kj::mv(deferredNeuter)]

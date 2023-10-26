@@ -66,36 +66,34 @@ static void parseListMetadata(jsg::Lock& js,
   });
 }
 
-struct response {
-  char *memory;
-  size_t size;
-};
-
+// write callback function for curl
 static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
-
-  size_t realsize = size * nmemb;
-  struct response *mem = (struct response *)userp;
-
-  char *ptr = (char *)realloc(mem->memory, mem->size + realsize + 1);
-
-  if(!ptr) {
-    // out of memory
-    KJ_LOG(ERROR, "not enough memory (realloc returned NULL)");
-    return 0;
-  }
-
-  mem->memory = ptr;
-  memcpy(&(mem->memory[mem->size]), contents, realsize);
-  mem->size += realsize;
-  mem->memory[mem->size] = 0;
-
-  return realsize;
+  ((std::string*)userp)->append((char*)contents, size * nmemb);
+  return size * nmemb;
 }
 
-static void makeRemoteGet(char *url, struct response& readBuffer) {
+// js global object for whether consistency check was ok
+static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
+  jsg::JsObject g = js.global();
+  jsg::JsValue queueName = js.str("consistencyQueue");
+
+  g.set(js, queueName, js.boolean(isFine));
+
+  // auto q = g.get(js, queueName);
+  // if (q.isUndefined()){
+  //   g.set(js, queueName, js.arr());
+  // }
+  // KJ_IF_SOME(q, q.tryCast<jsg::JsArray>()) {
+
+  // }
+  // kj::String val = g.get(js, "jsKey").toJson(js);
+  // KJ_LOG(ERROR, "js.global().get()", val);
+}
+
+// use curl to fill out readBuffer
+static void makeRemoteGet(char *url, std::string readBuffer) {
   CURL *curl;
   CURLcode res;
-  // struct response readBuffer = {.memory = malloc(0), .size = 0};
 
   curl = curl_easy_init();
   if(curl) {
@@ -105,7 +103,84 @@ static void makeRemoteGet(char *url, struct response& readBuffer) {
     res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
   }
-  JSG_REQUIRE(readBuffer.size > 0, TypeError, "curl easy did not work");
+  JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
+}
+
+static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
+
+  std::string readBuffer;
+  makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
+  // convert string to JsValue json (always expect a json)
+  jsg::JsValue readBufferJs = jsg::JsValue::fromJson("DATA(" + readBuffer + ")DATA");
+  KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
+
+  // compare readBuffer version_number with result
+  KJ_IF_SOME(r, result) {
+    // we should expect a json
+    KJ_SWITCH_ONEOF(r) {
+      KJ_CASE_ONEOF(stream, jsg::Ref<ReadableStream>) {
+        KJ_LOG(ERROR, "not handling stream");
+        // ReadableStream::Reader reader = stream->getReader(js);
+
+        // std::vector<uint8_t> v;
+        // reader.read(js).then(js, [js, v](ReadResult readRes) mutable {
+        //   if (readRes.done) {
+        //     return;
+        //   }
+
+        //   v.push_back(readRes.value.getHandle(js));
+
+        // });
+
+      }
+      KJ_CASE_ONEOF(arr, kj::Array<byte>) {
+        KJ_LOG(ERROR, "not handling array");
+        // char *p = readBuffer.memory;
+        // // consistency check
+        // if(arr.size() != readBuffer.size) {
+        //   return;
+        // }
+        // while (*p) {
+        //   if(arr[i] != *p) {
+        //     return;
+        //   }
+        //   p++;
+        // }
+      }
+      KJ_CASE_ONEOF(text, kj::String) {
+        KJ_LOG(ERROR, "not handling string")
+        // std::String s(readBuffer.memory);
+
+        // if(s != text) {
+        //   return;
+        // }
+
+      }
+      KJ_CASE_ONEOF(val, jsg::JsRef<jsg::JsValue>>) {
+        KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
+
+        KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
+          jsg::JsValue version = json.get("version_number");
+          // compare with readBuffer version number
+          KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
+            jsg::JsValue checkVersion = readBufferJson.get("version_number");
+            pushToJsGlobal(js, version == checkVersion);
+          } else{
+            KJ_LOG(ERROR, "not json")
+          }
+        } else {
+          KJ_LOG(ERROR, "not json");
+        }
+
+        // std::String s(readBuffer.memory);
+
+        // if(s != sJson) {
+        //   return;
+        // }
+      }
+    }
+    KJ_UNREACHABLE;
+  }
 }
 
 constexpr auto FLPROD_405_HEADER = "CF-KV-FLPROD-405"_kj;
@@ -167,10 +242,6 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
   auto& context = IoContext::current();
 
-  jsg::JsObject g = js.global();
-  kj::String val = g.get(js, "jsKey").toJson(js);
-  KJ_LOG(ERROR, "js.global().get()", val);
-
   kj::Url url;
   url.scheme = kj::str("https");
   url.host = kj::str("fake-host");
@@ -196,7 +267,6 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
   struct response readBuffer = {.memory = (char *)malloc(0), .size = 0};
   makeRemoteGet("https://www.google.com", readBuffer);
-  KJ_LOG(ERROR, std::string(readBuffer.memory));
 
   auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
 
@@ -277,6 +347,10 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
     }
     return result.then(js, [maybeMeta = kj::mv(maybeMeta), cacheStatus = kj::mv(cacheStatus)]
         (jsg::Lock& js, KvNamespace::GetResult result) mutable -> KvNamespace::GetWithMetadataResult {
+
+      // place thread call here
+      std::thread t(getConsistencyCheck, js, result);
+
       kj::Maybe<jsg::JsRef<jsg::JsValue>> meta;
       KJ_IF_SOME (metaStr, maybeMeta) {
         meta = jsg::JsRef(js, jsg::JsValue::fromJson(js, metaStr));
@@ -367,13 +441,6 @@ jsg::Promise<void> KvNamespace::put(
     validateKeyName("PUT", name);
 
     auto& context = IoContext::current();
-
-    jsg::JsObject g = js.global();
-    constexpr kj::StringPtr kjValue = R"DATA({
-      "example": true
-    })DATA"_kjc;
-    jsg::JsValue v = jsg::JsValue::fromJson(js, kjValue);
-    g.set(js, "jsKey", v);
 
     kj::Url url;
     url.scheme = kj::str("https");
