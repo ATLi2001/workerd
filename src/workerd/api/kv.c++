@@ -156,28 +156,28 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         // }
 
       }
-      KJ_CASE_ONEOF(val, jsg::JsRef<jsg::JsValue>>) {
-        KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
+      // KJ_CASE_ONEOF(val, jsg::JsRef<jsg::JsValue>>) {
+      //   KJ_LOG(ERROR, "getConsistencyCheck kv get result", val->toJson(js));
 
-        KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
-          jsg::JsValue version = json.get(js, "version_number");
-          // compare with readBuffer version number
-          KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
-            jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
-            pushToJsGlobal(js, version == checkVersion);
-          } else{
-            KJ_LOG(ERROR, "not json");
-          }
-        } else {
-          KJ_LOG(ERROR, "not json");
-        }
+      //   KJ_IF_SOME(json, val->tryCast<jsg::JsObject>()) {
+      //     jsg::JsValue version = json.get(js, "version_number");
+      //     // compare with readBuffer version number
+      //     KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
+      //       jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
+      //       pushToJsGlobal(js, version == checkVersion);
+      //     } else{
+      //       KJ_LOG(ERROR, "not json");
+      //     }
+      //   } else {
+      //     KJ_LOG(ERROR, "not json");
+      //   }
 
-        // std::String s(readBuffer.memory);
+      //   // std::String s(readBuffer.memory);
 
-        // if(s != sJson) {
-        //   return;
-        // }
-      }
+      //   // if(s != sJson) {
+      //   //   return;
+      //   // }
+      // }
     }
     KJ_UNREACHABLE;
   }
