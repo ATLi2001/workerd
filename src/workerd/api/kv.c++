@@ -349,7 +349,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
       // place thread call here
       // std::thread t(getConsistencyCheck, js, result);
-      getConsistencyCheck(js, kj::Own<KvNamespace::GetResult>(result));
+      getConsistencyCheck(js, kj::attachRef(&result));
       KJ_LOG(ERROR, "post getConsistencyCheck");
 
       kj::Maybe<jsg::JsRef<jsg::JsValue>> meta;
