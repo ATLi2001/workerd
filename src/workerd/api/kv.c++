@@ -91,7 +91,7 @@ static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
 }
 
 // use curl to fill out readBuffer
-static void makeRemoteGet(std::string url, std::string readBuffer) {
+static void makeRemoteGet(std::string url, std::string& readBuffer) {
   CURL *curl;
   CURLcode res;
 
@@ -111,7 +111,7 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
   // convert string to JsValue json (always expect a json)
-  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str("DATA(" + readBuffer + ")DATA"));
+  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str(readBuffer));
   KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
 
   // compare readBuffer version_number with result
@@ -180,7 +180,6 @@ static void getConsistencyCheck(jsg::Lock& js, KvNamespace::GetResult result) {
         // }
       }
     }
-    KJ_UNREACHABLE;
   }
 }
 
@@ -348,6 +347,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
       // place thread call here
       // std::thread t(getConsistencyCheck, js, result);
+      getConsistencyCheck(js, result);
+      KJ_LOG(ERROR, "post getConsistencyCheck");
 
       kj::Maybe<jsg::JsRef<jsg::JsValue>> meta;
       KJ_IF_SOME (metaStr, maybeMeta) {
