@@ -106,7 +106,9 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
   JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
 }
 
-static void getConsistencyCheck(jsg::Lock& js, kj::Own<KvNamespace::GetResult> result) {
+static void getConsistencyCheck(jsg::Lock& js, kj::Own<KvNamespace::GetResult> resultPtr) {
+
+  KvNamespace::GetResult result = *resultPtr;
 
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
@@ -347,7 +349,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
       // place thread call here
       // std::thread t(getConsistencyCheck, js, result);
-      getConsistencyCheck(js, kj::attachVal(result));
+      getConsistencyCheck(js, kj::mv(kj::attachVal(result)));
       KJ_LOG(ERROR, "post getConsistencyCheck");
 
       kj::Maybe<jsg::JsRef<jsg::JsValue>> meta;
