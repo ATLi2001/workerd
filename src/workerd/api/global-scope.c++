@@ -127,6 +127,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
   if (headers_str.find("Transfer-Encoding: chunked") != std::string::npos) {
     // keep track of how many get requests there are
     jsg::JsObject g = js.global();
+    KJ_LOG(ERROR, "getCount set global", g.hashCode(), g.getConstructorName());
     jsg::JsValue getCountName = js.strIntern("getCount");
     auto maybeCount = g.get(js, getCountName);
     if(maybeCount.isUndefined()) {
@@ -257,7 +258,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
     }
   } else KJ_IF_SOME(promise, event->getResponsePromise(lock)) {
     auto body2 = kj::addRef(*ownRequestBody);
-    KJ_LOG(ERROR, "global scope getResponsePromise", method, url, headers);
 
     // HACK: If the client disconnects, the `response` reference is no longer valid. But our
     //   promise resolves in JavaScript space, so won't be canceled. So we need to track
@@ -276,7 +276,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             (jsg::Lock& js, jsg::Ref<Response> innerResponse) mutable
             -> IoOwn<kj::Promise<DeferredProxy<void>>> {
       auto& context = IoContext::current();
-      KJ_LOG(ERROR, "ioContext.addFunctor()", headers);
       // Drop our fetch_handler span now that the promise has resolved.
       span = kj::none;
       if (canceled->value) {
@@ -288,6 +287,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         // localhost in header implies this is end of chain (about to go back to user)
         if (headers_str.find("localhost") != std::string::npos) {
           jsg::JsObject g = js.global();
+          KJ_LOG(ERROR, "ioContext.addFunctor() global", g.hashCode(), g.getConstructorName());
 
           // look at consistency check results
           jsg::JsValue queueName = js.strIntern("consistencyQueue");

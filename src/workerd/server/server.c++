@@ -2429,15 +2429,11 @@ public:
                                         kj::Own<Connection> conn,
                                         kj::Own<kj::AsyncIoStream> stream) -> kj::Promise<void> {
         try {
-	  KJ_LOG(ERROR, "static auto constexpr listen begin try");
           co_await conn->listedHttp.httpServer.listenHttp(kj::mv(stream));
-	  KJ_LOG(ERROR, "static auto constexpr listen");
         } catch (...) {
           KJ_LOG(ERROR, kj::getCaughtExceptionAsKj());
         }
       };
-
-      KJ_LOG(ERROR, "httpListener run()");
 
       // Run the connection handler loop in the global task set, so that run() waits for open
       // connections to finish before returning, even if the listener loop is canceled. However,
@@ -2477,7 +2473,6 @@ private:
           kj::Maybe<uint64_t> expectedBodySize = kj::none) override {
         auto rewrite = headers.cloneShallow();
         rewriter.rewriteResponse(rewrite);
-	KJ_LOG(ERROR, "Connection send");
         return inner.send(statusCode, statusText, rewrite, expectedBodySize);
       }
 

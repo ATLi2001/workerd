@@ -75,6 +75,7 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 // js global object for whether consistency check was ok
 static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
   jsg::JsObject g = js.global();
+  KJ_LOG(ERROR, "pushToJsGlobal", g.hashCode(), g.getConstructorName());
   jsg::JsValue queueName = js.strIntern("consistencyQueue");
 
   g.set(js, queueName, js.boolean(isFine));
