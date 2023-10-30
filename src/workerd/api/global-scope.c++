@@ -294,8 +294,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             // number of gets to expect
             jsg::JsValue getCountName = js.strIntern("getCount");
             auto maybeCount = g.get(js, getCountName);
-            // wait for maybeCount to be defined
-            while(maybeCount.isUndefined());
             // get the count
             KJ_IF_SOME(c, maybeCount.tryCast<jsg::JsInt32>()) {
               KJ_LOG(ERROR, "getCount", c);
