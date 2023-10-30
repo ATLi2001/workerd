@@ -268,30 +268,32 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
           jsg::JsObject g = js.global();
           KJ_LOG(ERROR, "ioContext.addFunctor() global", g.hashCode());
 
-          // look at consistency check results
-          jsg::JsValue queueName = js.strIntern("consistencyQueue");
-          auto maybeVal = g.get(js, queueName);
-          // shouldn't be undefined but make sure
-          if(!maybeVal.isUndefined()) {
-            // number of worker kv gets to expect
-            jsg::JsValue getCountName = js.strIntern("getCount");
-            auto maybeCount = g.get(js, getCountName);
+          // number of worker kv gets to expect
+          jsg::JsValue getCountName = js.strIntern("getCount");
+          auto maybeCount = g.get(js, getCountName);
+          if(!maybeCount.isUndefined()) {
             // get the count
             KJ_IF_SOME(c, maybeCount.tryCast<jsg::JsInt32>()) {
               KJ_LOG(ERROR, "getCount", c);
-            } else {
-              KJ_LOG(ERROR, "getCount not a number");
-            }
 
-            // expected type
-            KJ_IF_SOME(b, maybeVal.tryCast<jsg::JsBoolean>()) {
-              // if not ok, return an error
-              if(!b.value(js)) {
-                return context.addObject(kj::heap(addNoopDeferredProxy(
-                  response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
+              // look at consistency check results
+              jsg::JsValue queueName = js.strIntern("consistencyQueue");
+              auto maybeVal = g.get(js, queueName);
+              // shouldn't be undefined but make sure
+              if(!maybeVal.isUndefined()) {
+                // expected type
+                KJ_IF_SOME(b, maybeVal.tryCast<jsg::JsBoolean>()) {
+                  // if not ok, return an error
+                  if(!b.value(js)) {
+                    return context.addObject(kj::heap(addNoopDeferredProxy(
+                      response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
+                  }
+                } else {
+                  KJ_LOG(ERROR, "not a boolean");
+                }
               }
             } else {
-              KJ_LOG(ERROR, "not a boolean");
+              KJ_LOG(ERROR, "getCount not a number");
             }
           }
         }

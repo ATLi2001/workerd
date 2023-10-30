@@ -384,7 +384,9 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           [](jsg::Lock& js, kj::String text) {
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
-        getConsistencyCheck(js, ref.addRef(js));
+        // thread to check consistency of get request
+        std::thread t(getConsistencyCheck, js, ref.addRef(js));
+        t.detach();
 
         return KvNamespace::GetResult(kj::mv(ref));
       });
@@ -395,11 +397,6 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
     }
     return result.then(js, [maybeMeta = kj::mv(maybeMeta), cacheStatus = kj::mv(cacheStatus)]
         (jsg::Lock& js, KvNamespace::GetResult result) mutable -> KvNamespace::GetWithMetadataResult {
-
-      // place thread call here
-      // std::thread t(getConsistencyCheck, js, result);
-      // getConsistencyCheck(js, kj::attachRef(&result));
-      // KJ_LOG(ERROR, "post getConsistencyCheck");
 
       kj::Maybe<jsg::JsRef<jsg::JsValue>> meta;
       KJ_IF_SOME (metaStr, maybeMeta) {
