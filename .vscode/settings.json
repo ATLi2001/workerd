@@ -35,6 +35,7 @@
         "xlocmon": "cpp",
         "xlocnum": "cpp",
         "xloctime": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "random": "cpp"
     },
 }

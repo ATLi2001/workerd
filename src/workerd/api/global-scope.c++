@@ -121,6 +121,26 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
   auto& ioContext = IoContext::current();
   jsg::Lock& js = lock;
 
+  // track the number of worker kv get requests
+  // Transfer-Encoding: chunked implies this is a get request
+  std::string headers_str(headers.toString().cStr());
+  if (headers_str.find("Transfer-Encoding: chunked") != std::string::npos) {
+    // keep track of how many get requests there are
+    jsg::JsObject g = js.global();
+    jsg::JsValue getCountName = js.strIntern("getCount");
+    auto maybeCount = g.get(js, getCountName);
+    if(maybeCount.isUndefined()) {
+      g.set(js, getCountName, js.num(1));
+    }
+    else {
+      KJ_IF_SOME(c, maybeCount.tryCast<uint32_t>()) {
+        g.set(js, getCountName, js.num(c+1));
+      } else {
+        KJ_LOG(ERROR, "getCount not a number");
+      }
+    }
+  }
+
   CfProperty cf(cfBlobJson);
 
   auto jsHeaders = jsg::alloc<Headers>(headers, Headers::Guard::REQUEST);
@@ -264,26 +284,9 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         // a dangling reference, let's not use it.
         return context.addObject(kj::heap(addNoopDeferredProxy(kj::READY_NOW)));
       } else {
-        std::string s(headers.toString().cStr());
-        // Transfer-Encoding: chunked implies this is a get request
-        if (s.find("Transfer-Encoding: chunked") != std::string::npos) {
-          // keep track of how many get requests there are
-          jsg::JsObject g = js.global();
-          jsg::JsValue getCountName = js.strIntern("getCount");
-          auto maybeCount = g.get(js, getCountName);
-          if(maybeCount.isUndefined()) {
-            g.set(js, getCountName, js.num(1));
-          }
-          else {
-            KJ_IF_SOME(c, maybeCount.tryCast<uint32_t>()) {
-              g.set(js, getCountName, js.num(c+1));
-            } else {
-              KJ_LOG(ERROR, "getCount not a number");
-            }
-          }
-        }
+        std::string headers_str(headers.toString().cStr());
         // localhost in header implies this is end of chain (about to go back to user)
-        if (s.find("localhost") != std::string::npos) {
+        if (headers_str.find("localhost") != std::string::npos) {
           jsg::JsObject g = js.global();
 
           // look at consistency check results
@@ -291,7 +294,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
           auto maybeVal = g.get(js, queueName);
           // shouldn't be undefined but make sure
           if(!maybeVal.isUndefined()) {
-            // number of gets to expect
+            // number of worker kv gets to expect
             jsg::JsValue getCountName = js.strIntern("getCount");
             auto maybeCount = g.get(js, getCountName);
             // get the count
