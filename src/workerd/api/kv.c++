@@ -14,8 +14,7 @@
 #include <kj/compat/http.h>
 #include <curl/curl.h>
 #include <string>
-#include <thread>
-#include <future>
+#include <kj/thread.h>
 
 namespace workerd::api {
 
@@ -385,8 +384,11 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
         // thread to check consistency of get request
-        std::thread t(getConsistencyCheck, js, ref.addRef(js));
-        t.detach();
+        kj::Thread t([js, ref]() {
+          getConsistencyCheck(js, ref.addRef(js));
+        });
+        t.detach()
+
 
         return KvNamespace::GetResult(kj::mv(ref));
       });
