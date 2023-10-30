@@ -275,8 +275,8 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             g.set(js, getCountName, js.num(1));
           }
           else {
-            KJ_IF_SOME(c, maybeCount.tryCast<jsg::JsInt32>()) {
-              g.set(js, getCountName, c + js.num(1));
+            KJ_IF_SOME(c, maybeCount.tryCast<uint32_t>()) {
+              g.set(js, getCountName, js.num(c+1));
             } else {
               KJ_LOG(ERROR, "getCount not a number");
             }
