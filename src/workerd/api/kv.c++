@@ -286,6 +286,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
     jsg::Lock& js, kj::String name, jsg::Optional<kj::OneOf<kj::String, GetOptions>> options) {
   validateKeyName("GET", name);
 
+  incJsGlobalGetCount(js);
+
   auto& context = IoContext::current();
 
   kj::Url url;
