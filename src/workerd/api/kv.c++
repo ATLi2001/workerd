@@ -66,6 +66,25 @@ static void parseListMetadata(jsg::Lock& js,
   });
 }
 
+// increment the global get Count
+static void incJsGlobalGetCount(jsg::Lock& js) {
+  // track the number of worker kv get requests
+  jsg::JsObject g = js.global();
+  KJ_LOG(ERROR, "incJsGlobalGetCount global", g.hashCode());
+  jsg::JsValue getCountName = js.strIntern("getCount");
+  auto maybeCount = g.get(js, getCountName);
+  if(maybeCount.isUndefined()) {
+    g.set(js, getCountName, js.num(1));
+  }
+  else {
+    KJ_IF_SOME(c, maybeCount.tryCast<uint32_t>()) {
+      g.set(js, getCountName, js.num(c+1));
+    } else {
+      KJ_LOG(ERROR, "getCount not a number");
+    }
+  }
+}
+
 // write callback function for curl
 static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
   ((std::string*)userp)->append((char*)contents, size * nmemb);
@@ -75,7 +94,7 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 // js global object for whether consistency check was ok
 static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
   jsg::JsObject g = js.global();
-  KJ_LOG(ERROR, "pushToJsGlobal", g.hashCode(), g.getConstructorName());
+  KJ_LOG(ERROR, "pushToJsGlobal", g.hashCode());
   jsg::JsValue queueName = js.strIntern("consistencyQueue");
 
   g.set(js, queueName, js.boolean(isFine));

@@ -121,27 +121,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
   auto& ioContext = IoContext::current();
   jsg::Lock& js = lock;
 
-  // track the number of worker kv get requests
-  // Transfer-Encoding: chunked implies this is a get request
-  std::string headers_str(headers.toString().cStr());
-  if (headers_str.find("Transfer-Encoding: chunked") != std::string::npos) {
-    // keep track of how many get requests there are
-    jsg::JsObject g = js.global();
-    KJ_LOG(ERROR, "getCount set global", g.hashCode(), g.getConstructorName());
-    jsg::JsValue getCountName = js.strIntern("getCount");
-    auto maybeCount = g.get(js, getCountName);
-    if(maybeCount.isUndefined()) {
-      g.set(js, getCountName, js.num(1));
-    }
-    else {
-      KJ_IF_SOME(c, maybeCount.tryCast<uint32_t>()) {
-        g.set(js, getCountName, js.num(c+1));
-      } else {
-        KJ_LOG(ERROR, "getCount not a number");
-      }
-    }
-  }
-
   CfProperty cf(cfBlobJson);
 
   auto jsHeaders = jsg::alloc<Headers>(headers, Headers::Guard::REQUEST);
@@ -287,7 +266,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         // localhost in header implies this is end of chain (about to go back to user)
         if (headers_str.find("localhost") != std::string::npos) {
           jsg::JsObject g = js.global();
-          KJ_LOG(ERROR, "ioContext.addFunctor() global", g.hashCode(), g.getConstructorName());
+          KJ_LOG(ERROR, "ioContext.addFunctor() global", g.hashCode());
 
           // look at consistency check results
           jsg::JsValue queueName = js.strIntern("consistencyQueue");
