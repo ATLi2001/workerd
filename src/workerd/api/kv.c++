@@ -126,6 +126,12 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
 }
 
 static void getConsistencyCheck(jsg::Lock& js, jsg::JsRef<jsg::JsValue> valRef) {
+
+  auto& context = IoContext::current();
+  jsg::Lock& contextJs = context.getCurrentLock();
+  KJ_LOG(ERROR, "contextJs global hashcode", contextJs.global().hashCode());
+
+
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
   // convert string to JsValue json (always expect a json)
@@ -384,10 +390,11 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
         // thread to check consistency of get request
-        kj::Thread t([js, ref]() {
-          getConsistencyCheck(js, ref.addRef(js));
-        });
-        t.detach()
+        // kj::Thread t([&]() {
+        //   getConsistencyCheck(js, ref.addRef(js));
+        // });
+        // t.detach();
+        getConsistencyCheck(js, ref.addRef(js));
 
 
         return KvNamespace::GetResult(kj::mv(ref));
