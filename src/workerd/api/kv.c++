@@ -125,12 +125,11 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
   JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
 }
 
-static void getConsistencyCheck(jsg::JsRef<jsg::JsValue> valRef) {
+static void getConsistencyCheck(uint32_t local_version_number) {
 
   auto& context = IoContext::current();
   jsg::Lock& js = context.getCurrentLock();
   KJ_LOG(ERROR, "contextJs global hashcode", js.global().hashCode());
-
 
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
@@ -138,21 +137,9 @@ static void getConsistencyCheck(jsg::JsRef<jsg::JsValue> valRef) {
   jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str(readBuffer));
   KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
 
-  jsg::JsValue val = valRef.getHandle(js);
-  KJ_LOG(ERROR, "getConsistencyCheck kv get result", val.toJson(js));
+  jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
 
-  KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
-    jsg::JsValue version = json.get(js, "version_number");
-    // compare with readBuffer version number
-    KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
-      jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
-      pushToJsGlobal(js, version == checkVersion);
-    } else{
-      KJ_LOG(ERROR, "not json");
-    }
-  } else {
-    KJ_LOG(ERROR, "not json");
-  }
+  pushToJsGlobal(js, js.num(local_version_number) == checkVersion);
 }
 
 // static void getConsistencyCheck(jsg::Lock& js, kj::Own<KvNamespace::GetResult> resultPtr) {
@@ -389,16 +376,17 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           [](jsg::Lock& js, kj::String text) {
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
-        // thread to check consistency of get request
-        // kj::Thread t([&]() {
-        //   getConsistencyCheck(js, ref.addRef(js));
-        // });
-        // t.detach();
-        kj::Thread t([&]() {
-          getConsistencyCheck(ref.addRef(js));
-        });
-        t.detach();
+        jsg::JsValue val = ref.getHandle(js);
+        KJ_LOG(ERROR, "getConsistencyCheck kv get result", val.toJson(js));
 
+        KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
+          jsg::JsValue version = json.get(js, "version_number");
+          KJ_IF_SOME(n, version.tryCast<uint32_t>()){
+            kj::Thread t([n]() {
+              getConsistencyCheck(n);
+            });
+          }
+        }
 
         return KvNamespace::GetResult(kj::mv(ref));
       });
