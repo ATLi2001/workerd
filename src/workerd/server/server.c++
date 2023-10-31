@@ -2636,6 +2636,16 @@ uint startInspector(kj::StringPtr inspectorAddress,
   );
 }
 
+static void startConsistencyThread() {
+  static constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
+
+  kj::Thread thread([]() {
+    // kj::AsyncIoContext io = kj::setupAsyncIo();
+    KJ_LOG(ERROR, "startConsistencyThread");
+  });
+  thread.detach();
+}
+
 void Server::startServices(jsg::V8System& v8System, config::Config::Reader config,
                            kj::HttpHeaderTable::Builder& headerTableBuilder,
                            kj::ForkedPromise<void>& forkedDrainWhen) {
@@ -2717,6 +2727,8 @@ void Server::startServices(jsg::V8System& v8System, config::Config::Reader confi
     }
     inspectorIsolateRegistrar = kj::mv(registrar);
   }
+
+  startConsistencyThread();
 
   // Second pass: Build services.
   for (auto serviceConf: config.getServices()) {
