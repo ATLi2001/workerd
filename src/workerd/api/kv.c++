@@ -129,11 +129,8 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
   JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
 }
 
-static void getConsistencyCheck(uint32_t local_version_number) {
-
-  auto& context = IoContext::current();
-  jsg::Lock& js = context.getCurrentLock();
-  KJ_LOG(ERROR, "contextJs global hashcode", js.global().hashCode());
+static void getConsistencyCheck(jsg::Lock& js, uint32_t local_version_number) {
+  KJ_LOG(ERROR, "consistency check global hashcode", js.global().hashCode());
 
   std::string readBuffer;
   makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
@@ -310,8 +307,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
         KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
           jsg::JsValue version = json.get(js, "version_number");
           int n = jsNumToInt(js, version);
-          kj::Thread t([n]() {
-            getConsistencyCheck(n);
+          kj::Thread t([&js, n]() {
+            getConsistencyCheck(js, n);
           });
           t.detach();
         }
