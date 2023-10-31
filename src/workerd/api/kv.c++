@@ -70,6 +70,8 @@ static void incJsGlobalGetCount(jsg::Lock& js) {
   // track the number of worker kv get requests
   jsg::JsObject g = js.global();
   KJ_LOG(ERROR, "incJsGlobalGetCount global", g.hashCode());
+  // set the hashcode
+  g.set(js, js.strIntern("jsHashcode"), js.num(g.hashCode()));
   jsg::JsValue getCountName = js.strIntern("getCount");
   auto maybeCount = g.get(js, getCountName);
   if(maybeCount.isUndefined()) {

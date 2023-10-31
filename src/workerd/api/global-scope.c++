@@ -279,8 +279,11 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               // look at consistency check results
               jsg::JsValue queueName = js.strIntern("consistencyQueue");
               auto maybeVal = g.get(js, queueName);
-              // shouldn't be undefined but make sure
-              if(!maybeVal.isUndefined()) {
+              // if this corresponds to worker kv, wait on consistency queue
+              if(!g.get(js.strIntern("jsHashcode")).isUndefined()) {
+                while(!maybeVal.isUndefined()){
+                  maybeVal = g.get(js, queueName);
+                }
                 // expected type
                 KJ_IF_SOME(b, maybeVal.tryCast<jsg::JsBoolean>()) {
                   // if not ok, return an error
