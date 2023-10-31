@@ -65,6 +65,12 @@ static void parseListMetadata(jsg::Lock& js,
   });
 }
 
+// convert a JsValue to an int, assuming v is also a JsInt32
+static int jsNumToInt(jsg::Lock& js, jsg::JsValue v) {
+  std::string vString(v.toString(js).cStr());
+  return std::stoi(vString);
+}
+
 // increment the global get Count
 static void incJsGlobalGetCount(jsg::Lock& js) {
   // track the number of worker kv get requests
@@ -78,11 +84,7 @@ static void incJsGlobalGetCount(jsg::Lock& js) {
     g.set(js, getCountName, js.num(1));
   }
   else {
-    KJ_IF_SOME(c, maybeCount.tryCast<uint32_t>()) {
-      g.set(js, getCountName, js.num(c+1));
-    } else {
-      KJ_LOG(ERROR, "getCount not a number");
-    }
+    g.set(js, getCountName, js.num(jsNumToInt(js, maybeCount) + 1));
   }
 }
 
@@ -307,15 +309,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
         KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
           jsg::JsValue version = json.get(js, "version_number");
-          KJ_IF_SOME(n, version.tryCast<uint32_t>()){
-            // kj::Thread t([n]() {
-            //   getConsistencyCheck(n);
-            // });
-            // t.detach();
-            getConsistencyCheck(n);
-          } else {
-            KJ_LOG(ERROR, "json version_number could not be cast", version);
-          }
+          int n = jsNumToInt(js, version);
+          getConsistencyCheck(n);
         }
 
         return KvNamespace::GetResult(kj::mv(ref));
