@@ -125,11 +125,11 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
   JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
 }
 
-static void getConsistencyCheck(jsg::Lock& js, jsg::JsRef<jsg::JsValue> valRef) {
+static void getConsistencyCheck(jsg::JsRef<jsg::JsValue> valRef) {
 
   auto& context = IoContext::current();
-  jsg::Lock& contextJs = context.getCurrentLock();
-  KJ_LOG(ERROR, "contextJs global hashcode", contextJs.global().hashCode());
+  jsg::Lock& js = context.getCurrentLock();
+  KJ_LOG(ERROR, "contextJs global hashcode", js.global().hashCode());
 
 
   std::string readBuffer;
