@@ -310,7 +310,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           jsg::JsValue version = json.get(js, "version_number");
           int n = jsNumToInt(js, version);
           kj::Thread t([&js, n]() {
-            getConsistencyCheck(js, n);
+            js.withinHandleScope(getConsistencyCheck(js, n));
           });
           t.detach();
         }
