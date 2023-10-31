@@ -15,6 +15,7 @@
 #include <curl/curl.h>
 #include <string>
 #include <kj/thread.h>
+#include <workerd/util/thread-scopes.h>
 
 namespace workerd::api {
 
@@ -305,6 +306,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
         KJ_LOG(ERROR, "val json", val.toJson(js));
 
         KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
+          AllowV8BackgroundThreadsScope allowBackgroundThreads;
           jsg::JsValue version = json.get(js, "version_number");
           int n = jsNumToInt(js, version);
           kj::Thread t([&js, n]() {
