@@ -394,7 +394,10 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
         //   getConsistencyCheck(js, ref.addRef(js));
         // });
         // t.detach();
-        getConsistencyCheck(js, ref.addRef(js));
+        kj::Thread t([&]() {
+          getConsistencyCheck(ref.addRef(js));
+        });
+        t.detach();
 
 
         return KvNamespace::GetResult(kj::mv(ref));
