@@ -136,10 +136,13 @@ static void getConsistencyCheck(uint32_t local_version_number) {
   // convert string to JsValue json (always expect a json)
   jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str(readBuffer));
   KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
+  KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
+    jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
+    pushToJsGlobal(js, js.num(local_version_number) == checkVersion);
+  } else {
+    KJ_LOG(ERROR, "not json");
+  }
 
-  jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
-
-  pushToJsGlobal(js, js.num(local_version_number) == checkVersion);
 }
 
 // static void getConsistencyCheck(jsg::Lock& js, kj::Own<KvNamespace::GetResult> resultPtr) {
