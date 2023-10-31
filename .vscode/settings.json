@@ -36,6 +36,8 @@
         "xlocnum": "cpp",
         "xloctime": "cpp",
         "set": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "atomic": "cpp",
+        "condition_variable": "cpp"
     },
 }
