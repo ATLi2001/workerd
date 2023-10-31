@@ -132,7 +132,7 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
 
 static void getConsistencyCheck(jsg::Lock& js, uint32_t local_version_number) {
   js.withinHandleScope([&, local_version_number] {
-    js.enterContextScope(js.getContext());
+    js.enterContextScope(js.v8Context());
     KJ_LOG(ERROR, "consistency check global hashcode", js.global().hashCode());
 
     std::string readBuffer;
