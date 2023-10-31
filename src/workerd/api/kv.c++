@@ -131,20 +131,21 @@ static void makeRemoteGet(std::string url, std::string& readBuffer) {
 }
 
 static void getConsistencyCheck(jsg::Lock& js, uint32_t local_version_number) {
-  KJ_LOG(ERROR, "consistency check global hashcode", js.global().hashCode());
+  js.withinHandleScope([&, local_version_number] {
+    KJ_LOG(ERROR, "consistency check global hashcode", js.global().hashCode());
 
-  std::string readBuffer;
-  makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
-  // convert string to JsValue json (always expect a json)
-  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str(readBuffer));
-  KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
-  KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
-    jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
-    pushToJsGlobal(js, js.num(local_version_number) == checkVersion);
-  } else {
-    KJ_LOG(ERROR, "not json");
-  }
-
+    std::string readBuffer;
+    makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
+    // convert string to JsValue json (always expect a json)
+    jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str(readBuffer));
+    KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
+    KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
+      jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
+      pushToJsGlobal(js, js.num(local_version_number) == checkVersion);
+    } else {
+      KJ_LOG(ERROR, "not json");
+    }
+  });
 }
 
 constexpr auto FLPROD_405_HEADER = "CF-KV-FLPROD-405"_kj;
@@ -310,7 +311,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           jsg::JsValue version = json.get(js, "version_number");
           int n = jsNumToInt(js, version);
           kj::Thread t([&js, n]() {
-            js.withinHandleScope(getConsistencyCheck(js, n));
+            getConsistencyCheck(js, n);
           });
           t.detach();
         }
