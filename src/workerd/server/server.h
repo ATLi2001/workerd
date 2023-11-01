@@ -76,6 +76,8 @@ public:
   class InspectorService;
   class InspectorServiceIsolateRegistrar;
 
+  class ConsistencyCheckService;
+
 private:
   kj::Filesystem& fs;
   kj::Timer& timer;

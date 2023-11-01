@@ -2781,7 +2781,7 @@ uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
   static constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
   kj::MutexGuarded<uint> consistencyCheckPort(CONSISTENCY_UNASSIGNED_PORT);
 
-  kj::Thread thread([&consistencyCheckAddress]() {
+  kj::Thread thread([consistencyCheckAddress, &consistencyCheckPort]() {
     KJ_LOG(ERROR, "startConsistencyThread");
 
     kj::AsyncIoContext io = kj::setupAsyncIo();
@@ -2901,8 +2901,8 @@ void Server::startServices(jsg::V8System& v8System, config::Config::Reader confi
     inspectorIsolateRegistrar = kj::mv(registrar);
   }
 
-  auto consistencyPort = startConsistencyThread();
-  KJ_LOG(ERROR, "consistency thread listening...", port);
+  auto consistencyPort = startConsistencyThread(kj::str("127.0.0.1"));
+  KJ_LOG(ERROR, "consistency thread listening...", consistencyPort);
 
   // Second pass: Build services.
   for (auto serviceConf: config.getServices()) {
