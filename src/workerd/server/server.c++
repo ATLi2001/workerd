@@ -28,6 +28,7 @@
 #include "workerd-api.h"
 #include <stdlib.h>
 #include <curl/curl.h>
+#include <string>
 
 namespace workerd::server {
 
@@ -2548,8 +2549,7 @@ public:
   ConsistencyCheckService(
       kj::Timer& timer,
       kj::HttpHeaderTable::Builder& headerTableBuilder)
-      : timer(timer),
-        headerTable(headerTableBuilder.getFutureTable()),
+      : headerTable(headerTableBuilder.getFutureTable()),
         server(timer, headerTable, *this, kj::HttpServerSettings {
           .errorHandler = *this
         }),
@@ -2582,23 +2582,22 @@ public:
     }
     // post request means do the consistency check
     else if (method == kj::HttpMethod::POST) {
-      kj::Maybe<kj::StringPtr> keyMaybe = headers.get("key");
-      kj::Maybe<kj::StringPtr> versionNumberMaybe = headers.get("versionNumber");
+      auto keyHeader = KJ_ASSERT_NONNULL(headerTable.stringToId(kj::str("key")));
+      auto versionNumberHeader = KJ_ASSERT_NONNULL(headerTable.stringToId(kj::str("versionNumber")));
+      auto key = KJ_ASSERT_NONNULL(headers.get(keyHeader));
+      auto versionNumber = KJ_ASSERT_NONNULL(headers.get(versionNumberHeader));
 
-      KJ_IF_SOME(key, keyMaybe) {
-        KJ_IF_SOME(versionNumber, versionNumberMaybe) {
-          bool res = getConsistencyCheck(key, std::stoi(versionNumber));
+      // do consistency check
+      bool res = getConsistencyCheck(key, std::stoi(versionNumber));
 
-          // if we have gotten an error in consistency check, no need to continue
-          if (!res) {
-            co_return co_await response.sendError(500, "Consistency Check Error", responseHeaders);
-          }
-
-          auto content = kj::str("");
-          auto out = response.send(200, "OK", responseHeaders, content.size());
-          co_return co_await out->write(content.begin(), content.size());
-        }
+      // if we have gotten an error in consistency check, no need to continue
+      if (!res) {
+        co_return co_await response.sendError(500, "Consistency Check Error", responseHeaders);
       }
+
+      auto content = kj::str("");
+      auto out = response.send(200, "OK", responseHeaders, content.size());
+      co_return co_await out->write(content.begin(), content.size());
     }
     else {
       co_return co_await response.sendError(501, "Unsupported Operation", responseHeaders);
@@ -2622,13 +2621,12 @@ public:
   }
 
 private:
-  kj::Timer& timer;
   kj::HttpHeaderTable& headerTable;
   kj::HttpServer server;
   size_t numReceived;
 
   // write callback function for curl
-  size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
+  static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
     ((std::string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
   }
@@ -2656,6 +2654,7 @@ private:
     // convert string to json (always expect a json)
     capnp::MallocMessageBuilder message;
     auto root = message.initRoot<capnp::JsonValue>();
+    capnp::JsonCodec json;
     json.decode(kj::str(readBuffer), root);
 
     auto object = root.getObject();
