@@ -2588,7 +2588,7 @@ public:
       auto versionNumber = KJ_ASSERT_NONNULL(headers.get(versionNumberHeader));
 
       // do consistency check
-      bool res = getConsistencyCheck(key, std::stoi(versionNumber));
+      bool res = getConsistencyCheck(key, std::stoi(std::string(versionNumber.cStr())));
 
       // if we have gotten an error in consistency check, no need to continue
       if (!res) {
