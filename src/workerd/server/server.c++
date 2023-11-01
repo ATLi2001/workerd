@@ -27,6 +27,7 @@
 #include <workerd/util/mimetype.h>
 #include "workerd-api.h"
 #include <stdlib.h>
+#include <curl/curl.h>
 
 namespace workerd::server {
 
@@ -2540,6 +2541,145 @@ kj::Promise<void> Server::listenHttp(
 }
 
 // =======================================================================================
+// ConsistencyCheckService
+
+class Server::ConsistencyCheckService final: public kj::HttpService, public kj::HttpServerErrorHandler {
+public:
+  ConsistencyCheckService(
+      kj::Timer& timer,
+      kj::HttpHeaderTable::Builder& headerTableBuilder)
+      : timer(timer),
+        headerTable(headerTableBuilder.getFutureTable()),
+        server(timer, headerTable, *this, kj::HttpServerSettings {
+          .errorHandler = *this
+        }),
+        numReceived(0) {}
+        // numReceived is number of checks successfully received
+
+  kj::Promise<void> handleApplicationError(
+      kj::Exception exception, kj::Maybe<kj::HttpService::Response&> response) override {
+    KJ_LOG(ERROR, kj::str("Uncaught exception: ", exception));
+    KJ_IF_SOME(r, response) {
+      co_return co_await r.sendError(500, "Internal Server Error", headerTable);
+    }
+  }
+
+  kj::Promise<void> request(
+      kj::HttpMethod method,
+      kj::StringPtr url,
+      const kj::HttpHeaders& headers,
+      kj::AsyncInputStream& requestBody,
+      kj::HttpService::Response& response) override {
+
+    kj::HttpHeaders responseHeaders(headerTable);
+
+    // get request means return the numReceived
+    if (method == kj::HttpMethod::GET) {
+      responseHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT);
+      auto content = kj::str(numReceived);
+      auto out = response.send(200, "OK", responseHeaders, content.size());
+      co_return co_await out->write(content.begin(), content.size());
+    }
+    // post request means do the consistency check
+    else if (method == kj::HttpMethod::POST) {
+      kj::Maybe<kj::StringPtr> keyMaybe = headers.get("key");
+      kj::Maybe<kj::StringPtr> versionNumberMaybe = headers.get("versionNumber");
+
+      KJ_IF_SOME(key, keyMaybe) {
+        KJ_IF_SOME(versionNumber, versionNumberMaybe) {
+          bool res = getConsistencyCheck(key, std::stoi(versionNumber));
+
+          // if we have gotten an error in consistency check, no need to continue
+          if (!res) {
+            co_return co_await response.sendError(500, "Consistency Check Error", responseHeaders);
+          }
+
+          auto content = kj::str("");
+          auto out = response.send(200, "OK", responseHeaders, content.size());
+          co_return co_await out->write(content.begin(), content.size());
+        }
+      }
+    }
+    else {
+      co_return co_await response.sendError(501, "Unsupported Operation", responseHeaders);
+    }
+  }
+
+  kj::Promise<void> listen(kj::Own<kj::ConnectionReceiver> listener) {
+    // Note that we intentionally do not make inspector connections be part of the usual drain()
+    // procedure. Inspector connections are always long-lived WebSockets, and we do not want the
+    // existence of such a connection to hold the server open. We do, however, want the connection
+    // to stay open until all other requests are drained, for debugging purposes.
+    //
+    // Thus:
+    // * We let connection loop tasks live on `HttpServer`'s own `TaskSet`, rather than our
+    //   server's main `TaskSet` which we wait to become empty on drain.
+    // * We do not add this `HttpServer` to the server's `httpServers` list, so it will not receive
+    //   drain() requests. (However, our caller does cancel listening on the server port as soon
+    //   as we begin draining, since we may want new connections to go to a new instance of the
+    //   server.)
+    co_return co_await server.listenHttp(*listener);
+  }
+
+private:
+  kj::Timer& timer;
+  kj::HttpHeaderTable& headerTable;
+  kj::HttpServer server;
+  size_t numReceived;
+
+  // write callback function for curl
+  size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+  }
+
+  // use curl to fill out readBuffer
+  void makeRemoteGet(std::string url, std::string& readBuffer) {
+    CURL *curl;
+    CURLcode res;
+
+    curl = curl_easy_init();
+    if(curl) {
+      curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+      res = curl_easy_perform(curl);
+      curl_easy_cleanup(curl);
+    }
+    JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
+  }
+
+  // given a key and the local version number, check against global truth
+  bool getConsistencyCheck(kj::StringPtr key, uint32_t local_version_number) {
+    std::string readBuffer;
+    makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
+    // convert string to json (always expect a json)
+    capnp::MallocMessageBuilder message;
+    auto root = message.initRoot<capnp::JsonValue>();
+    json.decode(kj::str(readBuffer), root);
+
+    auto object = root.getObject();
+    auto numKeys = object.size();
+    for(int i = 0; i < numKeys; ++i) {
+      if (object[i].getName() == kj::str("version_number")) {
+        auto checkVersion = object[i].getValue().getNumber();
+        if (checkVersion == local_version_number) {
+          ++numReceived;
+          return true;
+        }
+        else {
+          return false;
+        }
+      }
+    }
+
+    // if there was no version_number key
+    return false;
+  }
+};
+
+
+// =======================================================================================
 // Server::run()
 
 kj::Promise<void> Server::handleDrain(kj::Promise<void> drainWhen) {
@@ -2636,14 +2776,47 @@ uint startInspector(kj::StringPtr inspectorAddress,
   );
 }
 
-static void startConsistencyThread() {
+uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
+  static constexpr uint CONSISTENCY_UNASSIGNED_PORT = 0;
   static constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
+  kj::MutexGuarded<uint> consistencyCheckPort(CONSISTENCY_UNASSIGNED_PORT);
 
-  kj::Thread thread([]() {
-    // kj::AsyncIoContext io = kj::setupAsyncIo();
+  kj::Thread thread([&consistencyCheckAddress]() {
     KJ_LOG(ERROR, "startConsistencyThread");
+
+    kj::AsyncIoContext io = kj::setupAsyncIo();
+
+    kj::HttpHeaderTable::Builder headerTableBuilder;
+
+    // Create the consistency check service.
+    auto consistencyCheckService(
+        kj::heap<Server::ConsistencyCheckService>(io.provider->getTimer(), headerTableBuilder));
+
+    headerTableBuilder.add("key");
+    headerTableBuilder.add("versionNumber");
+    auto ownHeaderTable = headerTableBuilder.build();
+
+    // Configure and start the consistency check socket.
+    auto& network = io.provider->getNetwork();
+
+    auto listen = (kj::coCapture([&network, &consistencyCheckAddress, &consistencyCheckPort,
+                                   &consistencyCheckService]() -> kj::Promise<void> {
+      auto parsed = co_await network.parseAddress(consistencyCheckAddress, CONSISTENCY_DEFAULT_PORT);
+      auto listener = parsed->listen();
+      // EW-7716: Signal to thread that started the inspector service that the inspector is ready.
+      *consistencyCheckPort.lockExclusive() = listener->getPort();
+      KJ_LOG(INFO, "Inspector is listening");
+      co_await consistencyCheckService->listen(kj::mv(listener));
+    }))();
+
+    kj::NEVER_DONE.wait(io.waitScope);
   });
   thread.detach();
+
+  return consistencyCheckPort.when(
+    [](const uint& port) { return port != CONSISTENCY_UNASSIGNED_PORT; },
+    [](const uint& port) { return port; }
+  );
 }
 
 void Server::startServices(jsg::V8System& v8System, config::Config::Reader config,
@@ -2728,7 +2901,8 @@ void Server::startServices(jsg::V8System& v8System, config::Config::Reader confi
     inspectorIsolateRegistrar = kj::mv(registrar);
   }
 
-  startConsistencyThread();
+  auto consistencyPort = startConsistencyThread();
+  KJ_LOG(ERROR, "consistency thread listening...", port);
 
   // Second pass: Build services.
   for (auto serviceConf: config.getServices()) {
