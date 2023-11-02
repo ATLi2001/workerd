@@ -23,6 +23,7 @@
 #include <workerd/util/stream-utils.h>
 
 #include <string>
+#include <curl/curl.h>
 
 namespace workerd::api {
 
@@ -98,6 +99,26 @@ ServiceWorkerGlobalScope::ServiceWorkerGlobalScope(v8::Isolate* isolate)
 void ServiceWorkerGlobalScope::clear() {
   removeAllHandlers();
   unhandledRejections.clear();
+}
+
+// write callback function for curl
+static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
+  ((std::string*)userp)->append((char*)contents, size * nmemb);
+  return size * nmemb;
+}
+
+static void makeConsistencyGet(std::string url, std::string& readBuffer) {
+  CURL *curl;
+
+  curl = curl_easy_init();
+  if(curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+  }
+  JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
 }
 
 kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
@@ -277,24 +298,19 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               KJ_LOG(ERROR, "getCount", c);
 
               // look at consistency check results
-              jsg::JsValue queueName = js.strIntern("consistencyQueue");
-              auto maybeVal = g.get(js, queueName);
-              // if this corresponds to worker kv, wait on consistency queue
-              if(!g.get(js, js.strIntern("jsHashcode")).isUndefined()) {
-                while(maybeVal.isUndefined()){
-                  maybeVal = g.get(js, queueName);
-                }
-                // expected type
-                KJ_IF_SOME(b, maybeVal.tryCast<jsg::JsBoolean>()) {
-                  // if not ok, return an error
-                  if(!b.value(js)) {
-                    return context.addObject(kj::heap(addNoopDeferredProxy(
+              std::string numCheck;
+              uint port = 6666;
+              std::string consistency_url("localhost");
+              consistency_url = consistency_url.append(std::to_string(port));
+              makeConsistencyGet(consistency_url, numCheck);
+              KJ_LOG(ERROR, "makeConsistencyGet", numCheck);
+              if(std::stoi(numCheck) < 0) {
+                return context.addObject(kj::heap(addNoopDeferredProxy(
                       response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
-                  }
-                } else {
-                  KJ_LOG(ERROR, "not a boolean");
-                }
               }
+              // while(numCheck != std::string(c.toString(js).cStr())) {
+              //   makeConsistencyGet(consistency_url, numCheck);
+              // }
             } else {
               KJ_LOG(ERROR, "getCount not a number");
             }
