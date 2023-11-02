@@ -322,13 +322,13 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
             auto versionNumberHeader = headerTableBuilder.add("versionNumber");
             auto ownHeaderTable = headerTableBuilder.build();
             // create http client
-            kj::Own<kj::HttpClient> httpClient = kj::newHttpClient(ownHeaderTable, kj::mv<result>);
+            kj::Own<kj::HttpClient> httpClient = kj::newHttpClient(*ownHeaderTable, kj::mv<result>);
             // set up headers
-            kj::HttpHeader headers(ownHeaderTable);
+            kj::HttpHeaders headers(*ownHeaderTable);
             headers.set(keyHeader, name);
             headers.set(versionNumberHeader, n);
             // make post request
-            auto request = httpClient->request(kj::HttpMethod::POST, "/", headers, 0);
+            auto request = httpClient->request(kj::HttpMethod::POST, "/", headers, uint64_t(0));
             request.body = nullptr;
 
             return request;
