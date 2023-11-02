@@ -88,25 +88,6 @@ static void incJsGlobalGetCount(jsg::Lock& js) {
   }
 }
 
-// js global object for whether consistency check was ok
-static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
-  jsg::JsObject g = js.global();
-  KJ_LOG(ERROR, "pushToJsGlobal", g.hashCode());
-  jsg::JsValue queueName = js.strIntern("consistencyQueue");
-
-  g.set(js, queueName, js.boolean(isFine));
-
-  // auto q = g.get(js, queueName);
-  // if (q.isUndefined()){
-  //   g.set(js, queueName, js.arr());
-  // }
-  // KJ_IF_SOME(q, q.tryCast<jsg::JsArray>()) {
-
-  // }
-  // kj::String val = g.get(js, "jsKey").toJson(js);
-  // KJ_LOG(ERROR, "js.global().get()", val);
-}
-
 // use curl to make post request to consistency check service
 static void makeConsistencyPost(std::string url, std::string key, int version_number) {
   CURL *curl;
@@ -287,23 +268,23 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           [&name](jsg::Lock& js, kj::String text) {
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
-        jsg::JsValue val = ref.getHandle(js);
-        KJ_LOG(ERROR, "val json", val.toJson(js));
+        // jsg::JsValue val = ref.getHandle(js);
+        // KJ_LOG(ERROR, "val json", val.toJson(js));
 
-        KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
-          // version number
-          jsg::JsValue version = json.get(js, "version_number");
-          int n = jsNumToInt(js, version);
+        // KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
+        //   // version number
+        //   jsg::JsValue version = json.get(js, "version_number");
+        //   int n = jsNumToInt(js, version);
 
-          // perform consistency check by making post request to localhost:6666
-          constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
-          std::string consistency_url("localhost");
-          consistency_url = consistency_url.append(std::to_string(CONSISTENCY_DEFAULT_PORT));
+        //   // perform consistency check by making post request to localhost:6666
+        //   uint port = 6666;
+        //   std::string consistency_url("localhost");
+        //   consistency_url = consistency_url.append(std::to_string(port));
 
-          // use thread to make POST request; we don't need to wait on it
-          std::thread t(makeConsistencyPost, consistency_url, std::string(name.cStr()), n);
-          t.detach();
-        }
+        //   // use thread to make POST request; we don't need to wait on it
+        //   std::thread t(makeConsistencyPost, consistency_url, std::string(name.cStr()), n);
+        //   t.detach();
+        // }
 
         return KvNamespace::GetResult(kj::mv(ref));
       });
