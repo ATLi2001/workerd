@@ -2657,7 +2657,7 @@ private:
     capnp::JsonCodec json;
     json.decode(kj::str(readBuffer), root);
 
-    KJ_EXPECT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
+    KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
     auto object = root.getObject();
     auto numKeys = object.size();
     for(int i = 0; i < numKeys; ++i) {

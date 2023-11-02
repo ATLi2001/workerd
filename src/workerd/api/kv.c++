@@ -14,8 +14,7 @@
 #include <kj/compat/http.h>
 #include <curl/curl.h>
 #include <string>
-#include <kj/thread.h>
-#include <workerd/util/thread-scopes.h>
+#include <thread>
 
 namespace workerd::api {
 
@@ -89,12 +88,6 @@ static void incJsGlobalGetCount(jsg::Lock& js) {
   }
 }
 
-// write callback function for curl
-static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
-  ((std::string*)userp)->append((char*)contents, size * nmemb);
-  return size * nmemb;
-}
-
 // js global object for whether consistency check was ok
 static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
   jsg::JsObject g = js.global();
@@ -114,35 +107,28 @@ static void pushToJsGlobal(jsg::Lock& js, bool isFine) {
   // KJ_LOG(ERROR, "js.global().get()", val);
 }
 
-// use curl to fill out readBuffer
-static void makeRemoteGet(std::string url, std::string& readBuffer) {
+// use curl to make post request to consistency check service
+static void makeConsistencyPost(std::string url, std::string key, int version_number) {
   CURL *curl;
-  CURLcode res;
 
   curl = curl_easy_init();
   if(curl) {
+    // POST request but no data
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-    res = curl_easy_perform(curl);
+    curl_easy_setopt(curl, CULROPT_POSTFIELDSIZE, 0L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
+    // set headers
+    struct curl_slist *list = NULL;
+    std::string key_header("key: ");
+    std::string version_number_header("versionNumber: ");
+    list = curl_slist_append(list, key_header.append(key).c_str());
+    list = curl_slist_append(list, version_number_header.append(std::string(version_number)).c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+    // do curl
+    curl_easy_perform(curl);
+    // cleanup
     curl_easy_cleanup(curl);
-  }
-  JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
-}
-
-static void getConsistencyCheck(jsg::Lock& js, uint32_t local_version_number) {
-  KJ_LOG(ERROR, "consistency check global hashcode", js.global().hashCode());
-
-  std::string readBuffer;
-  makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
-  // convert string to JsValue json (always expect a json)
-  jsg::JsValue readBufferJs = jsg::JsValue::fromJson(js, kj::str(readBuffer));
-  KJ_LOG(ERROR, "getConsistencyCheck readBufferJs", readBufferJs.toJson(js));
-  KJ_IF_SOME(readBufferJson, readBufferJs.tryCast<jsg::JsObject>()) {
-    jsg::JsValue checkVersion = readBufferJson.get(js, "version_number");
-    pushToJsGlobal(js, js.num(local_version_number) == checkVersion);
-  } else {
-    KJ_LOG(ERROR, "not json");
+    curl_slist_free_all(list);
   }
 }
 
@@ -311,30 +297,12 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
           // perform consistency check by making post request to localhost:6666
           constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
-          kj::AsyncIoContext io = kj::setupAsyncIo();
-          auto& network = io.provider->getNetwork();
-          auto res = network.parseAddress("localhost", CONSISTENCY_DEFAULT_PORT).then([&](kj::Own<kj::NetworkAddress>&& result) {
-            return result->connect();
-          }).then([&](kj::Own<kj::AsyncIoStream>&& result){
-            // header table will also have key and versionNumber
-            kj::HttpHeaderTable::Builder headerTableBuilder;
-            auto keyHeader = headerTableBuilder.add("key");
-            auto versionNumberHeader = headerTableBuilder.add("versionNumber");
-            auto ownHeaderTable = headerTableBuilder.build();
-            // create http client
-            kj::Own<kj::HttpClient> httpClient = kj::newHttpClient(*ownHeaderTable, kj::mv(result));
-            // set up headers
-            kj::HttpHeaders headers(*ownHeaderTable);
-            headers.set(keyHeader, name);
-            headers.set(versionNumberHeader, kj::str(n));
-            // make post request
-            auto request = httpClient->request(kj::HttpMethod::POST, "/", headers, uint64_t(0));
-            request.body = nullptr;
+          std::string consistency_url("localhost");
+          consistency_url = consistency_url.append(std::string(CONSISTENCY_DEFAULT_PORT));
 
-            return request;
-          });
-
-          res.wait(io.waitScope);
+          // use thread to make POST request; we don't need to wait on it
+          std::thread t(makeConsistencyPost, consistency_url, std::string(name.cStr()), n);
+          t.detach();
         }
 
         return KvNamespace::GetResult(kj::mv(ref));
