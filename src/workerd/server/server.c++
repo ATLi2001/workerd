@@ -2634,14 +2634,13 @@ private:
   // use curl to fill out readBuffer
   void makeRemoteGet(std::string url, std::string& readBuffer) {
     CURL *curl;
-    CURLcode res;
 
     curl = curl_easy_init();
     if(curl) {
       curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-      res = curl_easy_perform(curl);
+      curl_easy_perform(curl);
       curl_easy_cleanup(curl);
     }
     JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
