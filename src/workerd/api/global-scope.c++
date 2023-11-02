@@ -300,7 +300,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               // look at consistency check results
               std::string numCheck;
               uint port = 6666;
-              std::string consistency_url("localhost");
+              std::string consistency_url("localhost:");
               consistency_url = consistency_url.append(std::to_string(port));
               makeConsistencyGet(consistency_url, numCheck);
               KJ_LOG(ERROR, "makeConsistencyGet", numCheck);
