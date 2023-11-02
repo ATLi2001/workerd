@@ -115,14 +115,14 @@ static void makeConsistencyPost(std::string url, std::string key, int version_nu
   if(curl) {
     // POST request but no data
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CULROPT_POSTFIELDSIZE, 0L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
     // set headers
     struct curl_slist *list = NULL;
     std::string key_header("key: ");
     std::string version_number_header("versionNumber: ");
     list = curl_slist_append(list, key_header.append(key).c_str());
-    list = curl_slist_append(list, version_number_header.append(std::string(version_number)).c_str());
+    list = curl_slist_append(list, version_number_header.append(std::to_string(version_number)).c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
     // do curl
     curl_easy_perform(curl);
@@ -298,7 +298,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           // perform consistency check by making post request to localhost:6666
           constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
           std::string consistency_url("localhost");
-          consistency_url = consistency_url.append(std::string(CONSISTENCY_DEFAULT_PORT));
+          consistency_url = consistency_url.append(std::to_string(CONSISTENCY_DEFAULT_PORT));
 
           // use thread to make POST request; we don't need to wait on it
           std::thread t(makeConsistencyPost, consistency_url, std::string(name.cStr()), n);
