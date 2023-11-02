@@ -238,7 +238,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   auto request = client->request(kj::HttpMethod::GET, urlStr, headers);
   return context.awaitIo(js,
       kj::mv(request.response),
-      [type = kj::mv(type), &context, client = kj::mv(client)]
+      [type = kj::mv(type), &context, client = kj::mv(client), &name]
           (jsg::Lock& js, kj::HttpClient::Response&& response) mutable
           -> jsg::Promise<KvNamespace::GetWithMetadataResult> {
 
@@ -298,21 +298,43 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
       result = context.awaitIo(js,
           stream->readAllText(context.getLimitEnforcer().getBufferingLimit())
               .attach(kj::mv(stream)),
-          [](jsg::Lock& js, kj::String text) {
+          [&name](jsg::Lock& js, kj::String text) {
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
         jsg::JsValue val = ref.getHandle(js);
         KJ_LOG(ERROR, "val json", val.toJson(js));
 
         KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
-          // AllowV8BackgroundThreadsScope allowBackgroundThreads;
+          // version number
           jsg::JsValue version = json.get(js, "version_number");
           int n = jsNumToInt(js, version);
-          getConsistencyCheck(js, n);
-          // kj::Thread t([&js, n]() {
-          //   getConsistencyCheck(js, n);
-          // });
-          // t.detach();
+
+          // perform consistency check by making post request to localhost:6666
+          constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
+          kj::AsyncIoContext io = kj::setupAsyncIo();
+          auto& network = io.provider->getNetwork();
+          auto res = network.parseAddress("localhost", CONSISTENCY_DEFAULT_PORT).then([&](kj::Own<kj::NetworkAddress>&& result) {
+            return result->connect();
+          }).then([&](kj::Own<kj::AsyncIoStream>&& result){
+            // header table will also have key and versionNumber
+            kj::HttpHeaderTable::Builder headerTableBuilder;
+            auto keyHeader = headerTableBuilder.add("key");
+            auto versionNumberHeader = headerTableBuilder.add("versionNumber");
+            auto ownHeaderTable = headerTableBuilder.build();
+            // create http client
+            kj::Own<kj::HttpClient> httpClient = kj::newHttpClient(ownHeaderTable, kj::mv<result>);
+            // set up headers
+            kj::HttpHeader headers(ownHeaderTable);
+            headers.set(keyHeader, name);
+            headers.set(versionNumberHeader, n);
+            // make post request
+            auto request = httpClient->request(kj::HttpMethod::POST, "/", headers, 0);
+            request.body = nullptr;
+
+            return request;
+          });
+
+          res.wait(io.waitScope);
         }
 
         return KvNamespace::GetResult(kj::mv(ref));

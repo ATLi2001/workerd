@@ -2657,6 +2657,7 @@ private:
     capnp::JsonCodec json;
     json.decode(kj::str(readBuffer), root);
 
+    KJ_EXPECT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
     auto object = root.getObject();
     auto numKeys = object.size();
     for(int i = 0; i < numKeys; ++i) {
@@ -2775,6 +2776,7 @@ uint startInspector(kj::StringPtr inspectorAddress,
   );
 }
 
+// configure and start the consistency check thread
 uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
   static constexpr uint CONSISTENCY_UNASSIGNED_PORT = 0;
   static constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
