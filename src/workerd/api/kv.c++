@@ -207,7 +207,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   auto request = client->request(kj::HttpMethod::GET, urlStr, headers);
   return context.awaitIo(js,
       kj::mv(request.response),
-      [type = kj::mv(type), &context, client = kj::mv(client), &keyName]
+      [type = kj::mv(type), &context, client = kj::mv(client), keyName]
           (jsg::Lock& js, kj::HttpClient::Response&& response) mutable
           -> jsg::Promise<KvNamespace::GetWithMetadataResult> {
 
@@ -267,7 +267,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
       result = context.awaitIo(js,
           stream->readAllText(context.getLimitEnforcer().getBufferingLimit())
               .attach(kj::mv(stream)),
-          [&keyName](jsg::Lock& js, kj::String text) {
+          [keyName](jsg::Lock& js, kj::String text) {
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
         jsg::JsValue val = ref.getHandle(js);

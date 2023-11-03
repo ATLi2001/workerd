@@ -2635,7 +2635,7 @@ public:
 private:
   kj::HttpHeaderTable& headerTable;
   kj::HttpServer server;
-  size_t numReceived;
+  int numReceived;
 
   // write callback function for curl
   static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
