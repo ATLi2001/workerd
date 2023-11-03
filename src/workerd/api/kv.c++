@@ -12,7 +12,7 @@
 #include <workerd/io/io-context.h>
 #include <kj/encoding.h>
 #include <kj/compat/http.h>
-#include <curl/curl.h>
+#include <workerd/util/curl-util.h>
 #include <string>
 #include <thread>
 
@@ -85,31 +85,6 @@ static void incJsGlobalGetCount(jsg::Lock& js) {
   }
   else {
     g.set(js, getCountName, js.num(jsNumToInt(js, maybeCount) + 1));
-  }
-}
-
-// use curl to make post request to consistency check service
-static void makeConsistencyPost(std::string url, std::string key, int version_number) {
-  CURL *curl;
-
-  curl = curl_easy_init();
-  if(curl) {
-    // POST request but no data
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
-    // set headers
-    struct curl_slist *list = NULL;
-    std::string key_header("key: ");
-    std::string version_number_header("versionNumber: ");
-    list = curl_slist_append(list, key_header.append(key).c_str());
-    list = curl_slist_append(list, version_number_header.append(std::to_string(version_number)).c_str());
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-    // do curl
-    curl_easy_perform(curl);
-    // cleanup
-    curl_easy_cleanup(curl);
-    curl_slist_free_all(list);
   }
 }
 
@@ -284,7 +259,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           consistency_url = consistency_url.append(std::to_string(port));
 
           // use thread to make POST request; we don't need to wait on it
-          std::thread t(makeConsistencyPost, consistency_url, keyName, n);
+          std::thread t(::workerd::curlPost, consistency_url, keyName, n);
           t.detach();
         }
 

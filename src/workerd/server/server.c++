@@ -27,7 +27,7 @@
 #include <workerd/util/mimetype.h>
 #include "workerd-api.h"
 #include <stdlib.h>
-#include <curl/curl.h>
+#include <workerd/util/curl-util.h>
 #include <string>
 
 namespace workerd::server {
@@ -2637,31 +2637,10 @@ private:
   kj::HttpServer server;
   int numReceived;
 
-  // write callback function for curl
-  static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
-    ((std::string*)userp)->append((char*)contents, size * nmemb);
-    return size * nmemb;
-  }
-
-  // use curl to fill out readBuffer
-  void makeRemoteGet(std::string url, std::string& readBuffer) {
-    CURL *curl;
-
-    curl = curl_easy_init();
-    if(curl) {
-      curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-      curl_easy_perform(curl);
-      curl_easy_cleanup(curl);
-    }
-    JSG_REQUIRE(readBuffer.size() > 0, TypeError, "curl easy did not work");
-  }
-
   // given a key and the local version number, check against global truth
   bool getConsistencyCheck(kj::StringPtr key, uint32_t local_version_number) {
     std::string readBuffer;
-    makeRemoteGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
+    ::workerd::curlGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
     // convert string to json (always expect a json)
     capnp::MallocMessageBuilder message;
     auto root = message.initRoot<capnp::JsonValue>();
