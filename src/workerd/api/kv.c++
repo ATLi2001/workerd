@@ -75,7 +75,7 @@ static int jsNumToInt(jsg::Lock& js, jsg::JsValue v) {
 static void incJsGlobalGetCount(jsg::Lock& js) {
   // track the number of worker kv get requests
   jsg::JsObject g = js.global();
-  KJ_LOG(ERROR, "incJsGlobalGetCount global", g.hashCode());
+  KJ_DBG("incJsGlobalGetCount global", g.hashCode());
   // set the hashcode
   g.set(js, js.strIntern("jsHashcode"), js.num(g.hashCode()));
   jsg::JsValue getCountName = js.strIntern("getCount");
@@ -170,6 +170,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
     jsg::Lock& js, kj::String name, jsg::Optional<kj::OneOf<kj::String, GetOptions>> options) {
   validateKeyName("GET", name);
 
+  std::string keyName(name.cStr());
+
   incJsGlobalGetCount(js);
 
   auto& context = IoContext::current();
@@ -205,7 +207,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
   auto request = client->request(kj::HttpMethod::GET, urlStr, headers);
   return context.awaitIo(js,
       kj::mv(request.response),
-      [type = kj::mv(type), &context, client = kj::mv(client), &name]
+      [type = kj::mv(type), &context, client = kj::mv(client), &keyName]
           (jsg::Lock& js, kj::HttpClient::Response&& response) mutable
           -> jsg::Promise<KvNamespace::GetWithMetadataResult> {
 
@@ -265,11 +267,11 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
       result = context.awaitIo(js,
           stream->readAllText(context.getLimitEnforcer().getBufferingLimit())
               .attach(kj::mv(stream)),
-          [&name](jsg::Lock& js, kj::String text) {
+          [&keyName](jsg::Lock& js, kj::String text) {
         auto ref = jsg::JsRef(js, jsg::JsValue::fromJson(js, text));
 
         jsg::JsValue val = ref.getHandle(js);
-        KJ_LOG(ERROR, "val json", val.toJson(js));
+        KJ_DBG("val json", val.toJson(js));
 
         KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
           // version number
@@ -278,11 +280,11 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
           // perform consistency check by making post request to localhost:6666
           uint port = 6666;
-          std::string consistency_url("localhost");
+          std::string consistency_url("localhost:");
           consistency_url = consistency_url.append(std::to_string(port));
 
           // use thread to make POST request; we don't need to wait on it
-          std::thread t(makeConsistencyPost, consistency_url, std::string(name.cStr()), n);
+          std::thread t(makeConsistencyPost, consistency_url, keyName, n);
           t.detach();
         }
 

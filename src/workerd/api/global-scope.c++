@@ -287,32 +287,27 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         // localhost in header implies this is end of chain (about to go back to user)
         if (headers_str.find("localhost") != std::string::npos) {
           jsg::JsObject g = js.global();
-          KJ_LOG(ERROR, "ioContext.addFunctor() global", g.hashCode());
+          KJ_DBG("ioContext.addFunctor() global", g.hashCode());
 
           // number of worker kv gets to expect
           jsg::JsValue getCountName = js.strIntern("getCount");
           auto maybeCount = g.get(js, getCountName);
           if(!maybeCount.isUndefined()) {
             // get the count
-            KJ_IF_SOME(c, maybeCount.tryCast<jsg::JsInt32>()) {
-              KJ_LOG(ERROR, "getCount", c);
-
-              // look at consistency check results
-              std::string numCheck;
-              uint port = 6666;
-              std::string consistency_url("localhost:");
-              consistency_url = consistency_url.append(std::to_string(port));
-              makeConsistencyGet(consistency_url, numCheck);
-              KJ_LOG(ERROR, "makeConsistencyGet", numCheck);
+            KJ_DBG("getCount", maybeCount);
+            // look at consistency check results
+            std::string numCheck;
+            uint port = 6666;
+            std::string consistency_url("localhost:");
+            consistency_url = consistency_url.append(std::to_string(port));
+            makeConsistencyGet(consistency_url, numCheck);
+            KJ_DBG("makeConsistencyGet", numCheck);
+            while(numCheck != std::string(maybeCount.toString(js).cStr())) {
               if(std::stoi(numCheck) < 0) {
                 return context.addObject(kj::heap(addNoopDeferredProxy(
                       response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
               }
-              // while(numCheck != std::string(c.toString(js).cStr())) {
-              //   makeConsistencyGet(consistency_url, numCheck);
-              // }
-            } else {
-              KJ_LOG(ERROR, "getCount not a number");
+              makeConsistencyGet(consistency_url, numCheck);
             }
           }
         }

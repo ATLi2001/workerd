@@ -2575,6 +2575,7 @@ public:
 
     // get request means return the numReceived
     if (method == kj::HttpMethod::GET) {
+      KJ_DBG("ConsistencyCheckService GET", numReceived);
       responseHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT);
       auto content = kj::str(numReceived);
       auto out = response.send(200, "OK", responseHeaders, content.size());
@@ -2586,18 +2587,29 @@ public:
       auto versionNumberHeader = KJ_ASSERT_NONNULL(headerTable.stringToId(kj::str("versionNumber")));
       auto key = KJ_ASSERT_NONNULL(headers.get(keyHeader));
       auto versionNumber = KJ_ASSERT_NONNULL(headers.get(versionNumberHeader));
+      KJ_DBG("ConsistencyCheckService POST", key, versionNumber);
 
-      // do consistency check
-      bool res = getConsistencyCheck(key, std::stoi(std::string(versionNumber.cStr())));
-
-      // if we have gotten an error in consistency check, no need to continue
-      if (!res) {
-        co_return co_await response.sendError(500, "Consistency Check Error", responseHeaders);
+      // do consistency check if there haven't been any failed checks previously
+      if (numReceived >= 0) {
+        bool res = getConsistencyCheck(key, std::stoi(std::string(versionNumber.cStr())));
+        if (!res) {
+          // set numReceived to -1 to indicate there has been a failure
+          numReceived = -1;
+          co_return co_await response.sendError(500, "Consistency Check Error", responseHeaders);
+        }
+        else {
+          // a successful check
+          ++numReceived;
+          auto content = kj::str("");
+          auto out = response.send(200, "OK", responseHeaders, content.size());
+          co_return co_await out->write(content.begin(), content.size());
+        }
+      }
+      else {
+        co_return co_await response.sendError(500, "Consistency Check Error previously", responseHeaders);
       }
 
-      auto content = kj::str("");
-      auto out = response.send(200, "OK", responseHeaders, content.size());
-      co_return co_await out->write(content.begin(), content.size());
+
     }
     else {
       co_return co_await response.sendError(501, "Unsupported Operation", responseHeaders);
@@ -2654,7 +2666,7 @@ private:
     capnp::MallocMessageBuilder message;
     auto root = message.initRoot<capnp::JsonValue>();
     capnp::JsonCodec json;
-    json.decode(kj::str(readBuffer), root);
+    json.decodeRaw(kj::str(readBuffer), root);
 
     KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
     auto object = root.getObject();
@@ -2662,13 +2674,7 @@ private:
     for(int i = 0; i < numKeys; ++i) {
       if (object[i].getName() == kj::str("version_number")) {
         auto checkVersion = object[i].getValue().getNumber();
-        if (checkVersion == local_version_number) {
-          ++numReceived;
-          return true;
-        }
-        else {
-          return false;
-        }
+        return checkVersion == local_version_number;
       }
     }
 
@@ -2782,7 +2788,7 @@ uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
   kj::MutexGuarded<uint> consistencyCheckPort(CONSISTENCY_UNASSIGNED_PORT);
 
   kj::Thread thread([consistencyCheckAddress, &consistencyCheckPort]() {
-    KJ_LOG(ERROR, "startConsistencyThread");
+    KJ_DBG("startConsistencyThread");
 
     kj::AsyncIoContext io = kj::setupAsyncIo();
 
@@ -2902,7 +2908,7 @@ void Server::startServices(jsg::V8System& v8System, config::Config::Reader confi
   }
 
   auto consistencyPort = startConsistencyThread(kj::str("127.0.0.1"));
-  KJ_LOG(ERROR, "consistency thread listening...", consistencyPort);
+  KJ_DBG("consistency thread listening...", consistencyPort);
 
   // Second pass: Build services.
   for (auto serviceConf: config.getServices()) {
