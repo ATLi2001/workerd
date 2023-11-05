@@ -7,7 +7,7 @@ WORKERD_BIN="$HOME/workerd/bazel-bin/src/workerd/server/workerd"
 WRANGLER_WORKERD_DIR="$HOME/workers-sdk/node_modules/.pnpm/@cloudflare+workerd-$LINUX_ARC@$WORKERD_VERSION/node_modules/@cloudflare/workerd-$LINUX_ARC"
 
 # build workerd
-bazel build //src/workerd/server:workerd
+bazel build --config=thin-lto //src/workerd/server:workerd
 
 # remove existing binary in wrangler
 rm -f "$WRANGLER_WORKERD_DIR/bin/workerd"

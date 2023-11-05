@@ -286,6 +286,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                 return context.addObject(kj::heap(addNoopDeferredProxy(
                       response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
               }
+	      numCheck.clear();
               ::workerd::curlGet(consistency_url, numCheck);
             }
           }
