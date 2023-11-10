@@ -261,6 +261,8 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
           // use thread to make POST request; we don't need to wait on it
           std::thread t(::workerd::curlPost, consistency_url, keyName, n);
           t.detach();
+          // synchronous version
+          // ::workerd::curlPost(consistency_url, keyName, n);
         }
 
         return KvNamespace::GetResult(kj::mv(ref));

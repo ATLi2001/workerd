@@ -13,13 +13,17 @@ namespace workerd {
 
   void curlGet(std::string url, std::string& readBuffer) {
     CURL *curl;
+    CURLcode res;
 
     curl = curl_easy_init();
     if(curl) {
       curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-      curl_easy_perform(curl);
+      res = curl_easy_perform(curl);
+      if(res != CURLE_OK) {
+        KJ_LOG(ERROR, "curlGet unsuccessful", url);
+      }
       curl_easy_cleanup(curl);
     }
     KJ_ASSERT(readBuffer.size() > 0, "curl easy did not work");
@@ -27,6 +31,7 @@ namespace workerd {
 
   void curlPost(std::string url, std::string key, int version_number) {
     CURL *curl;
+    CURLcode res;
 
     curl = curl_easy_init();
     if(curl) {
@@ -42,7 +47,10 @@ namespace workerd {
       list = curl_slist_append(list, version_number_header.append(std::to_string(version_number)).c_str());
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
       // do curl
-      curl_easy_perform(curl);
+      res = curl_easy_perform(curl);
+      if(res != CURLE_OK) {
+        KJ_LOG(ERROR, "curlPost unsuccessful", url, key, version_number);
+      }
       // cleanup
       curl_easy_cleanup(curl);
       curl_slist_free_all(list);
