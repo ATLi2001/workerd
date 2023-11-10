@@ -2589,9 +2589,19 @@ public:
       auto versionNumber = KJ_ASSERT_NONNULL(headers.get(versionNumberHeader));
       KJ_DBG("ConsistencyCheckService POST", key, versionNumber);
 
+      auto vn = std::stoi(std::string(versionNumber.cStr()));
+
+      // version number < 0 implies reset numReceived to 0
+      if (vn < 0) {
+        numReceived = 0;
+        auto content = kj::str("");
+        auto out = response.send(200, "OK", responseHeaders, content.size());
+        co_return co_await out->write(content.begin(), content.size());
+      }
+
       // do consistency check if there haven't been any failed checks previously
       if (numReceived >= 0) {
-        bool res = getConsistencyCheck(key, std::stoi(std::string(versionNumber.cStr())));
+        bool res = getConsistencyCheck(key, vn);
         if (!res) {
           // set numReceived to -1 to indicate there has been a failure
           numReceived = -1;
@@ -2608,8 +2618,6 @@ public:
       else {
         co_return co_await response.sendError(500, "Consistency Check Error previously", responseHeaders);
       }
-
-
     }
     else {
       co_return co_await response.sendError(501, "Unsupported Operation", responseHeaders);

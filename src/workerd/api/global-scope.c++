@@ -288,12 +288,16 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             KJ_DBG("makeConsistencyGet", numCheck);
             while(numCheck != getCount) {
               if(std::stoi(numCheck) < 0) {
+                // reset consistency service numReceived to 0
+                ::workerd::curlPost(consistency_url, "fakeKey", -1);
                 return context.addObject(kj::heap(addNoopDeferredProxy(
                       response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
               }
 	            numCheck.clear();
               ::workerd::curlGet(consistency_url, numCheck);
             }
+            // reset consistency service numReceived to 0
+            ::workerd::curlPost(consistency_url, "fakeKey", -1);
           }
         }
         // normal return
