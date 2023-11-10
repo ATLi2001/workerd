@@ -274,6 +274,11 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
           if(!maybeCount.isUndefined()) {
             // get the count
             KJ_DBG("getCount", maybeCount);
+            std::string getCount(maybeCount.toString(js).cStr());
+
+            // reset jsg global get count back to 0 before returning
+            g.set(js, getCountName, js.num(0));
+
             // look at consistency check results
             std::string numCheck;
             uint port = 6666;
@@ -281,12 +286,12 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             consistency_url = consistency_url.append(std::to_string(port));
             ::workerd::curlGet(consistency_url, numCheck);
             KJ_DBG("makeConsistencyGet", numCheck);
-            while(numCheck != std::string(maybeCount.toString(js).cStr())) {
+            while(numCheck != getCount) {
               if(std::stoi(numCheck) < 0) {
                 return context.addObject(kj::heap(addNoopDeferredProxy(
                       response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
               }
-	      numCheck.clear();
+	            numCheck.clear();
               ::workerd::curlGet(consistency_url, numCheck);
             }
           }

@@ -2651,7 +2651,8 @@ private:
     auto object = root.getObject();
     auto numKeys = object.size();
     for(int i = 0; i < numKeys; ++i) {
-      if (object[i].getName() == kj::str("version_number")) {
+      // userId for now, replace with version number when fully ready to integrate
+      if (object[i].getName() == kj::str("userId")) {
         auto checkVersion = object[i].getValue().getNumber();
         return checkVersion == local_version_number;
       }
