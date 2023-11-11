@@ -2,6 +2,7 @@
 
 #include <kj/debug.h>
 #include <curl/curl.h>
+#include <chrono>
 
 namespace workerd {
 
@@ -33,6 +34,8 @@ namespace workerd {
     CURL *curl;
     CURLcode res;
 
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
     curl = curl_easy_init();
     if(curl) {
       // POST request but no data
@@ -55,5 +58,10 @@ namespace workerd {
       curl_easy_cleanup(curl);
       curl_slist_free_all(list);
     }
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    KJ_DBG("curlPost timing", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
+
+
   }
 }

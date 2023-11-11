@@ -2609,6 +2609,7 @@ public:
         }
         else {
           // a successful check
+	  KJ_DBG("ConsistencyCheckService succeeded");
           ++numReceived;
           auto content = kj::str("");
           auto out = response.send(200, "OK", responseHeaders, content.size());
