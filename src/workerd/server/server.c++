@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <workerd/util/curl-util.h>
 #include <string>
+#include <map>
 
 namespace workerd::server {
 
@@ -2705,15 +2706,15 @@ private:
         status = object[i].getValue().getBoolean();
       }
       // failedKeys
-      else if (object[i].getName() == kj::str("failedKeys") {
+      else if (object[i].getName() == kj::str("failedKeys")) {
         KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
         auto failedKeysObj = object[i].getValue().getObject();
         auto numFailedKeys = failedKeysObj.size();
         // for each failed key
         for(int j = 0; j < numFailedKeys; ++j) {
-          auto currFailedKey = failedKeyObj[i].getName();
-          KJ_ASSERT(failedKeyObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyObj[i].getValue().which());
-          auto currFailedValue = failedKeyObj[i].getValue().getObject();
+          auto currFailedKey = failedKeysObj[i].getName();
+          KJ_ASSERT(failedKeysObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeysObj[i].getValue().which());
+          auto currFailedValue = failedKeysObj[i].getValue().getObject();
           auto currFailedValueSize = currFailedValue.size();
           // get the correct value and version
           kj::StringPtr correctValue;
@@ -2732,7 +2733,7 @@ private:
           currValueVersion["version"] = std::to_string(correctVersion);
           failedKeyValues[std::string(currFailedKey.cStr())] = currValueVersion;
         }
-      })
+      }
     }
 
     return status;
@@ -2745,11 +2746,11 @@ private:
     for(const auto& keyValuePair : failedKeyValues) {
       json += "\"" + keyValuePair.first + "\"";
       json += ": {\"value\": ";
-      json += "\"" + keyValuePair.second["value"] + "\""
+      json += "\"" + keyValuePair.second.at("value") + "\"";
       json += ", \"version\": ";
-      json += keyValuePair.second["version"] + "}"
+      json += keyValuePair.second.at("version") + "}";
       if (i < failedKeyValues.size() - 1) {
-        json += ", "
+        json += ", ";
       }
     }
     json += "}";
@@ -2983,7 +2984,7 @@ void Server::startServices(jsg::V8System& v8System, config::Config::Reader confi
     inspectorIsolateRegistrar = kj::mv(registrar);
   }
 
-  auto consistencyPort = startConsistencyThread(kj::str("127.0.0.1"));
+  auto consistencyPort = startConsistencyThread(kj::str("127.0.0.1"), kj::str("https://atliradicaltest.azurewebsites.net"));
   KJ_DBG("consistency thread listening...", consistencyPort);
 
   // Second pass: Build services.

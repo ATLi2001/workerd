@@ -306,7 +306,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               for(int i = 0; i < objSize; ++i) {
                 if (object[i].getName() == kj::str("numReceived")) {
                   numReceived.clear();
-                  numReceived = object[i].getValue().getString();
+                  numReceived = object[i].getValue().getString().cStr();
                 }
                 else if(object[i].getName() == kj::str("failedKeyValues")) {
                   KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
@@ -317,7 +317,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     auto currFailedKey = failedKeyValuesObj[i].getName();
                     KJ_ASSERT(failedKeyValuesObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[i].getValue().which());
                     auto currFailedValue = failedKeyValuesObj[i].getValue().getObject();
-                    auto currFailedValueText = json.encodeRaw(currFailedValue);
+                    auto currFailedValueText = json.encode(currFailedValue);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
                   }

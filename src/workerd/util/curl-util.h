@@ -12,4 +12,8 @@ namespace workerd {
   // make an http POST request to url
   // specific for consistency check headers
   void curlPost(std::string url, std::string key, int version_number);
+
+  // make and http POST request to url using the json
+  // return the response json in a string
+  std::string curlPostJson(std::string url, std::string json);
 }

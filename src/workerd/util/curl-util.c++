@@ -77,8 +77,8 @@ namespace workerd {
 
       // POST request with json
       curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-      curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)json.length);
-      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json);
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)json.length());
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json.c_str());
 
       // response write
       std::string response;
