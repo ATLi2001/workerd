@@ -281,8 +281,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             // reset jsg global get count back to 0 before returning
             g.set(js, getCountName, js.num(0));
 
-            // look at consistency check results
-            std::string checkResults;
             uint port = 6666;
             std::string consistency_url("localhost:");
             consistency_url = consistency_url.append(std::to_string(port));
@@ -290,6 +288,8 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 
             // want to get check results at least once, and then until it matches or has failed
             do {
+              // look at consistency check results
+              std::string checkResults;
               ::workerd::curlGet(consistency_url, checkResults);
               KJ_DBG("makeConsistencyGet", checkResults);
 
@@ -305,8 +305,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               // extract numReceived and the failedKeyValues
               for(int i = 0; i < objSize; ++i) {
                 if (object[i].getName() == kj::str("numReceived")) {
-                  numReceived.clear();
-                  numReceived = object[i].getValue().getString().cStr();
+                  numReceived = std::to_string((int)object[i].getValue().getNumber());
                 }
                 else if(object[i].getName() == kj::str("failedKeyValues")) {
                   KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
