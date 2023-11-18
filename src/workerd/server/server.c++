@@ -2556,10 +2556,9 @@ public:
         server(timer, headerTable, *this, kj::HttpServerSettings {
           .errorHandler = *this
         }),
-        numReceived(0),
-        radicalRemoteAddress(remoteAddress) {
-          std::string remoteStartUrl(remoteAddress.cStr());
-          remoteStartUrl += "/api/RemoteLifecycleStart";
+        numReceived(0) {
+          radicalRemoteAddress = remoteAddress.cStr();
+          std::string remoteStartUrl = radicalRemoteAddress + "/api/RemoteLifecycleStart";
           auto startResponse = ::workerd::curlPostJson(remoteStartUrl, "{}");
 
           // convert string to json (always expect a json)
@@ -2574,10 +2573,10 @@ public:
           auto numKeys = object.size();
           for(int i = 0; i < numKeys; ++i) {
             if (object[i].getName() == kj::str("id")) {
-              instanceId = object[i].getValue().getString();
+              instanceId = object[i].getValue().getString().cStr();
             }
           }
-          KJ_ASSERT(instanceId.size() > 0, "RemoteLifecycleStart response: id key expected but not found");
+          KJ_ASSERT(instanceId.length() > 0, "RemoteLifecycleStart response: id key expected but not found");
         }
 
 
@@ -2676,16 +2675,15 @@ private:
   kj::HttpHeaderTable& headerTable;
   kj::HttpServer server;
   int numReceived; // numReceived is number of checks successfully received
-  kj::StringPtr radicalRemoteAddress; // azure address for radical remote consistency checks
-  kj::StringPtr instanceId; // azure instance id
+  std::string radicalRemoteAddress; // azure address for radical remote consistency checks
+  std::string instanceId; // azure instance id
   std::map<std::string, std::map<std::string, std::string>> failedKeyValues; // json of failed keys and their values/versions
 
   // given a key and the local version number, check against global truth
   bool getConsistencyCheck(kj::StringPtr key, uint32_t local_version_number) {
-    std::string remoteCheckUrl(radicalRemoteAddress.cStr());
-    remoteCheckUrl += "/api/RemoteLifecycleEvent";
+    std::string remoteCheckUrl = radicalRemoteAddress + "/api/RemoteLifecycleEvent";
     std::string consistencyJson = R"({"RequestType": "ConsistencyCheck", "FunctionKey": "hello-world", "InstanceId": )";
-    consistencyJson += "\"" + std::string(instanceId.cStr()) + "\", ";
+    consistencyJson += "\"" + instanceId + "\", ";
     consistencyJson += R"("KeyVersions": {)";
     consistencyJson += "\"" + std::string(key.cStr()) + "\": ";
     consistencyJson += std::to_string(local_version_number) + "}}";
