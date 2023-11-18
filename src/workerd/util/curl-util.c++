@@ -61,7 +61,43 @@ namespace workerd {
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     KJ_DBG("curlPost timing", std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count());
+  }
 
+  std::string curlPostJson(std::string url, std::string json) {
+    CURL *curl;
+    CURLcode res;
 
+    curl = curl_easy_init();
+    if(curl) {
+      // set headers
+      struct curl_slist *headers = NULL;
+      headers = curl_slist_append(headers, "Accept: application/json");
+      headers = curl_slist_append(headers, "Content-Type: application/json");
+      curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+      // POST request with json
+      curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)json.length);
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json);
+
+      // response write
+      std::string response;
+      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+      // do curl
+      res = curl_easy_perform(curl);
+      if(res != CURLE_OK) {
+        KJ_LOG(ERROR, "curlPost unsuccessful", url, json);
+      }
+
+      // cleanup
+      curl_easy_cleanup(curl);
+      curl_slist_free_all(headers);
+
+      return response;
+    }
+
+    return "";
   }
 }

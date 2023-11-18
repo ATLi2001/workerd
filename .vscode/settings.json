@@ -83,6 +83,10 @@
         "xiosbase": "cpp",
         "xlocbuf": "cpp",
         "xlocinfo": "cpp",
-        "xtree": "cpp"
+        "xtree": "cpp",
+        "chrono": "cpp",
+        "forward_list": "cpp",
+        "iomanip": "cpp",
+        "sstream": "cpp"
     },
 }

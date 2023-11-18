@@ -633,6 +633,7 @@ void WorkerdApiIsolate::compileGlobals(
         // Don't use String's usual TypeHandler here because we want to intern the string.
         auto value = createBindingValue(lock, global, featureFlags, ownerId);
         KJ_ASSERT(!value.IsEmpty(), "global did not produce v8::Value");
+        // TODO: maybe somethign here about global name
         lockParam.v8Set(target, global.name, value);
       });
     }

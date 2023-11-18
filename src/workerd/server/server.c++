@@ -1985,6 +1985,7 @@ static kj::Maybe<WorkerdApiIsolate::Global> createBinding(
         binding.getKvNamespace(),
         kj::mv(errorContext)
       });
+      // TODO: maybe something here about the subrequestchannel
 
       return makeGlobal(Global::KvNamespace{.subrequestChannel = channel});
     }
@@ -2548,13 +2549,36 @@ class Server::ConsistencyCheckService final: public kj::HttpService, public kj::
 public:
   ConsistencyCheckService(
       kj::Timer& timer,
-      kj::HttpHeaderTable::Builder& headerTableBuilder)
+      kj::HttpHeaderTable::Builder& headerTableBuilder,
+      kj::StringPtr remoteAddress)
       : headerTable(headerTableBuilder.getFutureTable()),
         server(timer, headerTable, *this, kj::HttpServerSettings {
           .errorHandler = *this
         }),
-        numReceived(0) {}
-        // numReceived is number of checks successfully received
+        numReceived(0),
+        radicalRemoteAddress(remoteAddress) {
+          std::string remoteStartUrl(remoteAddress.cStr());
+          remoteStartUrl += "/api/RemoteLifecycleStart";
+          auto startResponse = ::workerd::curlPostJson(remoteStartUrl, "{}");
+
+          // convert string to json (always expect a json)
+          capnp::MallocMessageBuilder message;
+          auto root = message.initRoot<capnp::JsonValue>();
+          capnp::JsonCodec json;
+          json.decodeRaw(kj::str(startResponse), root);
+
+          // get the id of the function
+          KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
+          auto object = root.getObject();
+          auto numKeys = object.size();
+          for(int i = 0; i < numKeys; ++i) {
+            if (object[i].getName() == kj::str("id")) {
+              instanceId = object[i].getValue().getString();
+            }
+          }
+          KJ_ASSERT(instanceId.size() > 0, "RemoteLifecycleStart response: id key expected but not found");
+        }
+
 
   kj::Promise<void> handleApplicationError(
       kj::Exception exception, kj::Maybe<kj::HttpService::Response&> response) override {
@@ -2573,11 +2597,17 @@ public:
 
     kj::HttpHeaders responseHeaders(headerTable);
 
-    // get request means return the numReceived
+    // get request means return the numReceived and the failedKeyValues
     if (method == kj::HttpMethod::GET) {
       KJ_DBG("ConsistencyCheckService GET", numReceived);
-      responseHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT);
-      auto content = kj::str(numReceived);
+      responseHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::JSON.toString());
+      // create a json containing numReceived and failedKeyValues
+      std::string replyJson("{\"numReceived\": ");
+      replyJson += std::to_string(numReceived);
+      replyJson += ", \"failedKeyValues\": ";
+      replyJson += failedKeyValuesToString();
+      replyJson += "}";
+      auto content = kj::str(replyJson);
       auto out = response.send(200, "OK", responseHeaders, content.size());
       co_return co_await out->write(content.begin(), content.size());
     }
@@ -2609,7 +2639,7 @@ public:
         }
         else {
           // a successful check
-	  KJ_DBG("ConsistencyCheckService succeeded");
+	        KJ_DBG("ConsistencyCheckService succeeded");
           ++numReceived;
           auto content = kj::str("");
           auto out = response.send(200, "OK", responseHeaders, content.size());
@@ -2644,31 +2674,87 @@ public:
 private:
   kj::HttpHeaderTable& headerTable;
   kj::HttpServer server;
-  int numReceived;
+  int numReceived; // numReceived is number of checks successfully received
+  kj::StringPtr radicalRemoteAddress; // azure address for radical remote consistency checks
+  kj::StringPtr instanceId; // azure instance id
+  std::map<std::string, std::map<std::string, std::string>> failedKeyValues; // json of failed keys and their values/versions
 
   // given a key and the local version number, check against global truth
   bool getConsistencyCheck(kj::StringPtr key, uint32_t local_version_number) {
-    std::string readBuffer;
-    ::workerd::curlGet("https://jsonplaceholder.typicode.com/todos/1", readBuffer);
+    std::string remoteCheckUrl(radicalRemoteAddress.cStr());
+    remoteCheckUrl += "/api/RemoteLifecycleEvent";
+    std::string consistencyJson = R"({"RequestType": "ConsistencyCheck", "FunctionKey": "hello-world", "InstanceId": )";
+    consistencyJson += "\"" + std::string(instanceId.cStr()) + "\", ";
+    consistencyJson += R"("KeyVersions": {)";
+    consistencyJson += "\"" + std::string(key.cStr()) + "\": ";
+    consistencyJson += std::to_string(local_version_number) + "}}";
+
+    std::string response = ::workerd::curlPostJson(remoteCheckUrl, consistencyJson);
     // convert string to json (always expect a json)
     capnp::MallocMessageBuilder message;
     auto root = message.initRoot<capnp::JsonValue>();
     capnp::JsonCodec json;
-    json.decodeRaw(kj::str(readBuffer), root);
+    json.decodeRaw(kj::str(response), root);
 
     KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
     auto object = root.getObject();
-    auto numKeys = object.size();
-    for(int i = 0; i < numKeys; ++i) {
-      // userId for now, replace with version number when fully ready to integrate
-      if (object[i].getName() == kj::str("userId")) {
-        auto checkVersion = object[i].getValue().getNumber();
-        return checkVersion == local_version_number;
+    auto objSize = object.size();
+    bool status = false;
+    for(int i = 0; i < objSize; ++i) {
+      if (object[i].getName() == kj::str("status")) {
+        status = object[i].getValue().getBoolean();
       }
+      // failedKeys
+      else if (object[i].getName() == kj::str("failedKeys") {
+        KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
+        auto failedKeysObj = object[i].getValue().getObject();
+        auto numFailedKeys = failedKeysObj.size();
+        // for each failed key
+        for(int j = 0; j < numFailedKeys; ++j) {
+          auto currFailedKey = failedKeyObj[i].getName();
+          KJ_ASSERT(failedKeyObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyObj[i].getValue().which());
+          auto currFailedValue = failedKeyObj[i].getValue().getObject();
+          auto currFailedValueSize = currFailedValue.size();
+          // get the correct value and version
+          kj::StringPtr correctValue;
+          int correctVersion;
+          for(int k = 0; k < currFailedValueSize; ++k) {
+            if(currFailedValue[i].getName() == kj::str("value")) {
+              correctValue = currFailedValue[i].getValue().getString();
+            }
+            else if(currFailedValue[i].getName() == kj::str("version")) {
+              correctVersion = currFailedValue[i].getValue().getNumber();
+            }
+          }
+          // save the correct value and version so we can kv put it later
+          std::map<std::string, std::string> currValueVersion;
+          currValueVersion["value"] = correctValue;
+          currValueVersion["version"] = std::to_string(correctVersion);
+          failedKeyValues[std::string(currFailedKey.cStr())] = currValueVersion;
+        }
+      })
     }
 
-    // if there was no version_number key
-    return false;
+    return status;
+  }
+
+  // convert the failedKeyValues to a json string
+  std::string failedKeyValuesToString() {
+    std::string json("{");
+    int i = 0;
+    for(const auto& keyValuePair : failedKeyValues) {
+      json += "\"" + keyValuePair.first + "\"";
+      json += ": {\"value\": ";
+      json += "\"" + keyValuePair.second["value"] + "\""
+      json += ", \"version\": ";
+      json += keyValuePair.second["version"] + "}"
+      if (i < failedKeyValues.size() - 1) {
+        json += ", "
+      }
+    }
+    json += "}";
+
+    return json;
   }
 };
 
@@ -2770,13 +2856,14 @@ uint startInspector(kj::StringPtr inspectorAddress,
   );
 }
 
-// configure and start the consistency check thread
-uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
+// configure and start the consistency check thread on localConsistencyCheckAddress
+// also tell consistency check service where the remote address for checking is
+uint startConsistencyThread(kj::StringPtr localConsistencyCheckAddress, kj::StringPtr remoteAddress) {
   static constexpr uint CONSISTENCY_UNASSIGNED_PORT = 0;
   static constexpr uint CONSISTENCY_DEFAULT_PORT = 6666;
   kj::MutexGuarded<uint> consistencyCheckPort(CONSISTENCY_UNASSIGNED_PORT);
 
-  kj::Thread thread([consistencyCheckAddress, &consistencyCheckPort]() {
+  kj::Thread thread([localConsistencyCheckAddress, &consistencyCheckPort, remoteAddress]() {
     KJ_DBG("startConsistencyThread");
 
     kj::AsyncIoContext io = kj::setupAsyncIo();
@@ -2785,7 +2872,7 @@ uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
 
     // Create the consistency check service.
     auto consistencyCheckService(
-        kj::heap<Server::ConsistencyCheckService>(io.provider->getTimer(), headerTableBuilder));
+        kj::heap<Server::ConsistencyCheckService>(io.provider->getTimer(), headerTableBuilder, remoteAddress));
 
     headerTableBuilder.add("key");
     headerTableBuilder.add("versionNumber");
@@ -2794,9 +2881,9 @@ uint startConsistencyThread(kj::StringPtr consistencyCheckAddress) {
     // Configure and start the consistency check socket.
     auto& network = io.provider->getNetwork();
 
-    auto listen = (kj::coCapture([&network, &consistencyCheckAddress, &consistencyCheckPort,
+    auto listen = (kj::coCapture([&network, &localConsistencyCheckAddress, &consistencyCheckPort,
                                    &consistencyCheckService]() -> kj::Promise<void> {
-      auto parsed = co_await network.parseAddress(consistencyCheckAddress, CONSISTENCY_DEFAULT_PORT);
+      auto parsed = co_await network.parseAddress(localConsistencyCheckAddress, CONSISTENCY_DEFAULT_PORT);
       auto listener = parsed->listen();
       // EW-7716: Signal to thread that started the inspector service that the inspector is ready.
       *consistencyCheckPort.lockExclusive() = listener->getPort();

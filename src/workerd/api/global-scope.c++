@@ -22,6 +22,8 @@
 #include <workerd/api/util.h>
 #include <workerd/util/stream-utils.h>
 #include <workerd/util/curl-util.h>
+#include <capnp/compat/json.h>
+#include <workerd/api/kv.h>
 #include <string>
 
 namespace workerd::api {
@@ -280,22 +282,56 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             g.set(js, getCountName, js.num(0));
 
             // look at consistency check results
-            std::string numCheck;
+            std::string checkResults;
             uint port = 6666;
             std::string consistency_url("localhost:");
             consistency_url = consistency_url.append(std::to_string(port));
-            ::workerd::curlGet(consistency_url, numCheck);
-            KJ_DBG("makeConsistencyGet", numCheck);
-            while(numCheck != getCount) {
-              if(std::stoi(numCheck) < 0) {
+            std::string numReceived;
+
+            // want to get check results at least once, and then until it matches or has failed
+            do {
+              ::workerd::curlGet(consistency_url, checkResults);
+              KJ_DBG("makeConsistencyGet", checkResults);
+
+              // convert string to json
+              capnp::MallocMessageBuilder message;
+              auto root = message.initRoot<capnp::JsonValue>();
+              capnp::JsonCodec json;
+              json.decodeRaw(kj::str(checkResults), root);
+              KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
+              auto object = root.getObject();
+              auto objSize = object.size();
+
+              // extract numReceived and the failedKeyValues
+              for(int i = 0; i < objSize; ++i) {
+                if (object[i].getName() == kj::str("numReceived")) {
+                  numReceived.clear();
+                  numReceived = object[i].getValue().getString();
+                }
+                else if(object[i].getName() == kj::str("failedKeyValues")) {
+                  KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
+                  auto failedKeyValuesObj = object[i].getValue().getObject();
+                  auto numFailedKeys = failedKeyValuesObj.size();
+                  // for each failed key
+                  for(int j = 0; j < numFailedKeys; ++j) {
+                    auto currFailedKey = failedKeyValuesObj[i].getName();
+                    KJ_ASSERT(failedKeyValuesObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[i].getValue().which());
+                    auto currFailedValue = failedKeyValuesObj[i].getValue().getObject();
+                    auto currFailedValueText = json.encodeRaw(currFailedValue);
+                    // TODO: call kv put
+                    // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
+                  }
+                }
+              }
+
+              if(std::stoi(numReceived) < 0) {
                 // reset consistency service numReceived to 0
                 ::workerd::curlPost(consistency_url, "fakeKey", -1);
                 return context.addObject(kj::heap(addNoopDeferredProxy(
                       response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
               }
-	            numCheck.clear();
-              ::workerd::curlGet(consistency_url, numCheck);
-            }
+            } while(numReceived != getCount);
+
             // reset consistency service numReceived to 0
             ::workerd::curlPost(consistency_url, "fakeKey", -1);
           }
