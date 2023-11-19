@@ -313,21 +313,25 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                   auto numFailedKeys = failedKeyValuesObj.size();
                   // for each failed key
                   for(int j = 0; j < numFailedKeys; ++j) {
-                    auto currFailedKey = failedKeyValuesObj[i].getName();
-                    KJ_ASSERT(failedKeyValuesObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[i].getValue().which());
-                    auto currFailedValue = failedKeyValuesObj[i].getValue().getObject();
+                    auto currFailedKey = failedKeyValuesObj[j].getName();
+                    KJ_ASSERT(failedKeyValuesObj[j].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[j].getValue().which());
+                    auto currFailedValue = failedKeyValuesObj[j].getValue().getObject();
                     auto currFailedValueText = json.encode(currFailedValue);
+		    KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
 
                     kj::Url url;
                     url.scheme = kj::str("https");
                     url.host = kj::str("fake-host");
-                    url.path.add(kj::mv(currFailedKey));
+                    url.path.add(kj::str(currFailedKey));
                     url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
                     kj::HttpHeaders headers(context.getHeaderTable());
+		    KJ_DBG("pre kv put", headers);
                     auto expectedBodySize = currFailedValueText.size();
+		    KJ_DBG("pre kv put", expectedBodySize);
                     auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
+		    KJ_DBG("pre kv put", urlStr);
                     auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
                     auto innerReq = client->request(kj::HttpMethod::PUT, urlStr, headers, expectedBodySize);
                     innerReq.body->write(currFailedValueText.begin(), currFailedValueText.size());
