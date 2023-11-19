@@ -25,6 +25,7 @@
 #include <capnp/compat/json.h>
 #include <workerd/api/kv.h>
 #include <string>
+#include <workerd/util/mimetype.h>
 
 namespace workerd::api {
 
@@ -322,8 +323,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
 
-                    kj::AsyncIoContext io = kj::setupAsyncIo();
-
                     kj::Url url;
                     url.scheme = kj::str("https");
                     url.host = kj::str("fake-host");
@@ -334,13 +333,13 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     kj::HttpHeaders putHeaders(context.getHeaderTable());
                     putHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT_STRING);
                     putHeaders.add("CF-KV-FLPROD-405"_kj, urlStr);
-		                KJ_DBG("pre kv put", headers);
+		                KJ_DBG("pre kv put", putHeaders);
                     auto expectedBodySize = currFailedValueText.size();
 		                KJ_DBG("pre kv put", expectedBodySize);
                     // subreqeust channel is 2
                     auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
-                    auto innerReq = client->request(kj::HttpMethod::PUT, urlStr, headers, expectedBodySize);
-                    innerReq.body->write(currFailedValueText.begin(), currFailedValueText.size()).wait(io.waitScope);
+                    auto innerReq = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
+                    innerReq.body->write(currFailedValueText.begin(), currFailedValueText.size());
                   }
                 }
               }
