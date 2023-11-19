@@ -322,29 +322,29 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 		                KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
-
-                    js.evalNow([&] {
-                      kj::Url url;
-                      url.scheme = kj::str("https");
-                      url.host = kj::str("fake-host");
-                      url.path.add(kj::str(currFailedKey));
-                      url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
-                      auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
-                      KJ_DBG("pre kv put", urlStr);
-                      kj::HttpHeaders putHeaders(context.getHeaderTable());
-                      putHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT_STRING);
-                      putHeaders.add("CF-KV-FLPROD-405"_kj, urlStr);
-                      KJ_DBG("pre kv put", putHeaders);
-                      auto expectedBodySize = currFailedValueText.size();
-                      KJ_DBG("pre kv put", expectedBodySize);
-                      // subreqeust channel is 2
-                      auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
-                      auto req = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
-                      kj::Promise<void> writePromise = req.body->write(currFailedValueText.begin(), currFailedValueText.size()).attach(kj::mv(currFailedValueText));
-                      writePromise.then([](kj::HttpClient::Response response) {
-                        response.body->readAllBytes().attach(kj::mv(response.body)).ignoreResult();
-                      };)
+                    kj::Url url;
+                    url.scheme = kj::str("https");
+                    url.host = kj::str("fake-host");
+                    url.path.add(kj::str(currFailedKey));
+                    url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
+                    auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
+                    KJ_DBG("pre kv put", urlStr);
+                    kj::HttpHeaders putHeaders(context.getHeaderTable());
+                    putHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT_STRING);
+                    putHeaders.add("CF-KV-FLPROD-405"_kj, urlStr);
+                    KJ_DBG("pre kv put", putHeaders);
+                    auto expectedBodySize = currFailedValueText.size();
+                    KJ_DBG("pre kv put", expectedBodySize);
+                    // subreqeust channel is 2
+                    auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
+                    auto req = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
+                    kj::Promise<void> writePromise = req.body->write(currFailedValueText.begin(), currFailedValueText.size()).attach(kj::mv(currFailedValueText));
+                    auto kvPutResult = writePromise.attach(kj::mv(req.body)).then([resp = kj::mv(req.response)]() mutable {
+                      return resp.then([](kj::HttpClient::Response&& response) mutable {
+                        return response.body->readAllBytes().attach(kj::mv(response.body)).ignoreResult();
+                      });
                     });
+                    context.addObject(kj::heap(kvPutResult));
 
                   }
                 }
