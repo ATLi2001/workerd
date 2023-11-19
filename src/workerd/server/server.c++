@@ -2710,19 +2710,19 @@ private:
         auto numFailedKeys = failedKeysObj.size();
         // for each failed key
         for(int j = 0; j < numFailedKeys; ++j) {
-          auto currFailedKey = failedKeysObj[i].getName();
-          KJ_ASSERT(failedKeysObj[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeysObj[i].getValue().which());
-          auto currFailedValue = failedKeysObj[i].getValue().getObject();
+          auto currFailedKey = failedKeysObj[j].getName();
+          KJ_ASSERT(failedKeysObj[j].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeysObj[j].getValue().which());
+          auto currFailedValue = failedKeysObj[j].getValue().getObject();
           auto currFailedValueSize = currFailedValue.size();
           // get the correct value and version
           kj::StringPtr correctValue;
           int correctVersion;
           for(int k = 0; k < currFailedValueSize; ++k) {
-            if(currFailedValue[i].getName() == kj::str("value")) {
-              correctValue = currFailedValue[i].getValue().getString();
+            if(currFailedValue[k].getName() == kj::str("value")) {
+              correctValue = currFailedValue[k].getValue().getString();
             }
-            else if(currFailedValue[i].getName() == kj::str("version")) {
-              correctVersion = currFailedValue[i].getValue().getNumber();
+            else if(currFailedValue[k].getName() == kj::str("version")) {
+              correctVersion = currFailedValue[k].getValue().getNumber();
             }
           }
           // save the correct value and version so we can kv put it later

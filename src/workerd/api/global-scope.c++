@@ -319,6 +319,19 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     auto currFailedValueText = json.encode(currFailedValue);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
+
+                    kj::Url url;
+                    url.scheme = kj::str("https");
+                    url.host = kj::str("fake-host");
+                    url.path.add(kj::mv(currFailedKey));
+                    url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
+                    kj::HttpHeaders headers(context.getHeaderTable());
+                    auto expectedBodySize = currFailedValueText.size();
+                    auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
+                    auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
+                    auto innerReq = client->request(kj::HttpMethod::PUT, urlStr, headers, expectedBodySize);
+                    innerReq.body->write(currFailedValueText.begin(), currFailedValueText.size());
+
                   }
                 }
               }
