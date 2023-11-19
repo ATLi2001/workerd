@@ -330,9 +330,9 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                       }
                     }
                     std::string currFailedValueString = "{\"version\": " + std::to_string(correctVersion);
-                    currFailedValueString += ", value:" + correctValue + "}";
-                    kj::StringPtr currFailedValueText = kj::str(currFailedValueString);
-		                KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
+                    currFailedValueString += ", value: \"" + correctValue + "\"}";
+                    auto currFailedValueText = kj::str(currFailedValueString);
+                    KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
                     kj::Url url;
