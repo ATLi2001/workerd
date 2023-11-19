@@ -315,27 +315,32 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                   for(int j = 0; j < numFailedKeys; ++j) {
                     auto currFailedKey = failedKeyValuesObj[j].getName();
                     KJ_ASSERT(failedKeyValuesObj[j].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[j].getValue().which());
-                    auto currFailedValue = failedKeyValuesObj[j].getValue().getObject();
+                    auto currFailedValue = failedKeyValuesObj[j].getValue();
+                    json.setPrettyPrint(true);
                     auto currFailedValueText = json.encode(currFailedValue);
-		    KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
+		                KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
+
+                    kj::AsyncIoContext io = kj::setupAsyncIo();
 
                     kj::Url url;
                     url.scheme = kj::str("https");
                     url.host = kj::str("fake-host");
                     url.path.add(kj::str(currFailedKey));
                     url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
-                    kj::HttpHeaders headers(context.getHeaderTable());
-		    KJ_DBG("pre kv put", headers);
-                    auto expectedBodySize = currFailedValueText.size();
-		    KJ_DBG("pre kv put", expectedBodySize);
                     auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
-		    KJ_DBG("pre kv put", urlStr);
+		                KJ_DBG("pre kv put", urlStr);
+                    kj::HttpHeaders putHeaders(context.getHeaderTable());
+                    putHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT_STRING);
+                    putHeaders.add("CF-KV-FLPROD-405"_kj, urlStr);
+		                KJ_DBG("pre kv put", headers);
+                    auto expectedBodySize = currFailedValueText.size();
+		                KJ_DBG("pre kv put", expectedBodySize);
+                    // subreqeust channel is 2
                     auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
                     auto innerReq = client->request(kj::HttpMethod::PUT, urlStr, headers, expectedBodySize);
-                    innerReq.body->write(currFailedValueText.begin(), currFailedValueText.size());
-
+                    innerReq.body->write(currFailedValueText.begin(), currFailedValueText.size()).wait(io.waitScope);
                   }
                 }
               }

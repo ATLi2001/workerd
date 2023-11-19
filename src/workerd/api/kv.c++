@@ -121,6 +121,7 @@ kj::Own<kj::HttpClient> KvNamespace::getHttpClient(
   }();
 
   auto client = context.getHttpClient(subrequestChannel, true, kj::none, operationName);
+  KJ_DBG("kv getHttpClient", subrequestChannel);
   headers.add(FLPROD_405_HEADER, urlStr);
   for (const auto& header: additionalHeaders) {
     headers.add(header.name.asPtr(), header.value.asPtr());
