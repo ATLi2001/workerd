@@ -323,7 +323,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     int correctVersion;
                     for(int k = 0; k < currFailedValueSize; ++k) {
                       if(currFailedValue[k].getName() == kj::str("value")) {
-                        correctValue = currFailedValue[k].getValue().getString();
+                        correctValue = currFailedValue[k].getValue().getString().cStr();
                       }
                       else if(currFailedValue[k].getName() == kj::str("version")) {
                         correctVersion = currFailedValue[k].getValue().getNumber();
@@ -331,7 +331,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     }
                     std::string currFailedValueString = "{\"version\": " + std::to_string(correctVersion);
                     currFailedValueString += ", value:" + correctValue + "}";
-                    currFailedValueText = kj::str(currFailedValueString);
+                    kj::StringPtr currFailedValueText = kj::str(currFailedValueString);
 		                KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
