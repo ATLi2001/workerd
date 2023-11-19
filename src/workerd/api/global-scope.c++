@@ -322,8 +322,6 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 		                KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
-                    kj::EventLoop loop;
-                    kj::WaitScope waitScope(loop);
                     kj::Url url;
                     url.scheme = kj::str("https");
                     url.host = kj::str("fake-host");
@@ -346,7 +344,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                         return response.body->readAllBytes().attach(kj::mv(response.body)).ignoreResult();
                       });
                     });
-                    kvPutResult.wait(waitScope);
+		    context.addWaitUntil(kj::mv(kvPutResult).attach(kj::mv(writePromise)));
 
                   }
                 }
