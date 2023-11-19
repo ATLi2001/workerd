@@ -316,9 +316,22 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                   for(int j = 0; j < numFailedKeys; ++j) {
                     auto currFailedKey = failedKeyValuesObj[j].getName();
                     KJ_ASSERT(failedKeyValuesObj[j].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[j].getValue().which());
-                    auto currFailedValue = failedKeyValuesObj[j].getValue();
-                    json.setPrettyPrint(true);
-                    auto currFailedValueText = json.encode(currFailedValue);
+                    auto currFailedValue = failedKeyValuesObj[j].getValue().getObject();
+                    auto currFailedValueSize = currFailedValue.size();
+                    // extract the correct version and value
+                    std::string correctValue;
+                    int correctVersion;
+                    for(int k = 0; k < currFailedValueSize; ++k) {
+                      if(currFailedValue[k].getName() == kj::str("value")) {
+                        correctValue = currFailedValue[k].getValue().getString();
+                      }
+                      else if(currFailedValue[k].getName() == kj::str("version")) {
+                        correctVersion = currFailedValue[k].getValue().getNumber();
+                      }
+                    }
+                    std::string currFailedValueString = "{\"version\": " + std::to_string(correctVersion);
+                    currFailedValueString += ", value:" + correctValue + "}";
+                    currFailedValueText = kj::str(currFailedValueString);
 		                KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
                     // TODO: call kv put
                     // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
@@ -335,7 +348,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     KJ_DBG("pre kv put", putHeaders);
                     auto expectedBodySize = currFailedValueText.size();
                     KJ_DBG("pre kv put", expectedBodySize);
-                    // subreqeust channel is 2
+                    // subrequest channel is 2
                     auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
                     auto req = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
                     kj::Promise<void> writePromise = req.body->write(currFailedValueText.begin(), currFailedValueText.size()).attach(kj::mv(currFailedValueText));
@@ -344,7 +357,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                         return response.body->readAllBytes().attach(kj::mv(response.body)).ignoreResult();
                       });
                     });
-		    context.addWaitUntil(kj::mv(kvPutResult).attach(kj::mv(writePromise)));
+                    context.addWaitUntil(kj::mv(kvPutResult).attach(kj::mv(writePromise)));
 
                   }
                 }

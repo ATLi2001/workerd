@@ -251,7 +251,7 @@ jsg::Promise<KvNamespace::GetWithMetadataResult> KvNamespace::getWithMetadata(
 
         KJ_IF_SOME(json, val.tryCast<jsg::JsObject>()) {
           // version number
-          jsg::JsValue version = json.get(js, "version_number");
+          jsg::JsValue version = json.get(js, "version");
           int n = jsNumToInt(js, version);
 
           // perform consistency check by making post request to localhost:6666

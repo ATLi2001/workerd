@@ -2614,9 +2614,9 @@ public:
     // post request means do the consistency check
     else if (method == kj::HttpMethod::POST) {
       auto keyHeader = KJ_ASSERT_NONNULL(headerTable.stringToId(kj::str("key")));
-      auto versionNumberHeader = KJ_ASSERT_NONNULL(headerTable.stringToId(kj::str("versionNumber")));
+      auto versionHeader = KJ_ASSERT_NONNULL(headerTable.stringToId(kj::str("version")));
       auto key = KJ_ASSERT_NONNULL(headers.get(keyHeader));
-      auto versionNumber = KJ_ASSERT_NONNULL(headers.get(versionNumberHeader));
+      auto versionNumber = KJ_ASSERT_NONNULL(headers.get(versionHeader));
       KJ_DBG("ConsistencyCheckService POST", key, versionNumber);
 
       auto vn = std::stoi(std::string(versionNumber.cStr()));
@@ -2874,7 +2874,7 @@ uint startConsistencyThread(kj::StringPtr localConsistencyCheckAddress, kj::Stri
         kj::heap<Server::ConsistencyCheckService>(io.provider->getTimer(), headerTableBuilder, remoteAddress));
 
     headerTableBuilder.add("key");
-    headerTableBuilder.add("versionNumber");
+    headerTableBuilder.add("version");
     auto ownHeaderTable = headerTableBuilder.build();
 
     // Configure and start the consistency check socket.

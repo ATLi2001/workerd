@@ -45,7 +45,7 @@ namespace workerd {
       // set headers
       struct curl_slist *list = NULL;
       std::string key_header("key: ");
-      std::string version_number_header("versionNumber: ");
+      std::string version_number_header("version: ");
       list = curl_slist_append(list, key_header.append(key).c_str());
       list = curl_slist_append(list, version_number_header.append(std::to_string(version_number)).c_str());
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
