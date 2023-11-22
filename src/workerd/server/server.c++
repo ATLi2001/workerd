@@ -2549,35 +2549,40 @@ kj::Promise<void> Server::listenHttp(
 class Server::ConsistencyCheckService final: public kj::HttpService, public kj::HttpServerErrorHandler {
 public:
   ConsistencyCheckService(
-      kj::Timer& timer,
-      kj::HttpHeaderTable::Builder& headerTableBuilder,
-      kj::StringPtr remoteAddress)
-      : headerTable(headerTableBuilder.getFutureTable()),
-        server(timer, headerTable, *this, kj::HttpServerSettings {
-          .errorHandler = *this
-        }),
-        numReceived(0) {
-          radicalRemoteAddress = remoteAddress.cStr();
-          std::string remoteStartUrl = radicalRemoteAddress + "/api/RemoteLifecycleStart";
-          auto startResponse = ::workerd::curlPostJson(remoteStartUrl, "{}");
+    kj::Timer& timer,
+    kj::HttpHeaderTable::Builder& headerTableBuilder,
+    kj::StringPtr remoteAddress
+  ) :
+    headerTable(headerTableBuilder.getFutureTable()),
+    server(timer, headerTable, *this, kj::HttpServerSettings {
+      .errorHandler = *this
+    }),
+    numReceived(0) {
 
-          // convert string to json (always expect a json)
-          capnp::MallocMessageBuilder message;
-          auto root = message.initRoot<capnp::JsonValue>();
-          capnp::JsonCodec json;
-          json.decodeRaw(kj::str(startResponse), root);
+    radicalRemoteAddress = remoteAddress.cStr();
+    std::string remoteStartUrl = radicalRemoteAddress + "/api/RemoteLifecycleStart";
+    auto startResponse = ::workerd::curlPostJson(remoteStartUrl, "{}");
 
-          // get the id of the function
-          KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
-          auto object = root.getObject();
-          auto numKeys = object.size();
-          for(int i = 0; i < numKeys; ++i) {
-            if (object[i].getName() == kj::str("id")) {
-              instanceId = object[i].getValue().getString().cStr();
-            }
-          }
-          KJ_ASSERT(instanceId.length() > 0, "RemoteLifecycleStart response: id key expected but not found");
-        }
+    // convert startResponse to json
+    capnp::MallocMessageBuilder message;
+    auto root = message.initRoot<capnp::JsonValue>();
+    capnp::JsonCodec json;
+    json.decodeRaw(kj::str(startResponse), root);
+
+    // get the id of the function and statusQueryGetUri
+    KJ_ASSERT(root.which() == capnp::JsonValue::OBJECT, (uint)root.which());
+    auto object = root.getObject();
+    auto numKeys = object.size();
+    for(int i = 0; i < numKeys; ++i) {
+      if (object[i].getName() == kj::str("id")) {
+        instanceId = object[i].getValue().getString().cStr();
+      }
+      else if(object[i].getName() == kj::str("statusQueryGetUri")) {
+        remoteStatusUri = object[i].getValue().getString().cStr();
+      }
+    }
+    KJ_ASSERT(instanceId.length() > 0, "RemoteLifecycleStart response: id key expected but not found");
+  }
 
 
   kj::Promise<void> handleApplicationError(
@@ -2601,11 +2606,12 @@ public:
     if (method == kj::HttpMethod::GET) {
       KJ_DBG("ConsistencyCheckService GET", numReceived);
       responseHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::JSON.toString());
-      // create a json containing numReceived and failedKeyValues
+      // create a json containing numReceived, failedKeyValues, and the remote status uri
       std::string replyJson("{\"numReceived\": ");
       replyJson += std::to_string(numReceived);
       replyJson += ", \"failedKeyValues\": ";
       replyJson += failedKeyValuesToString();
+      replyJson += ", \"statusQueryGetUri\": \"" + remoteStatusUri + "\"";
       replyJson += "}";
       auto content = kj::str(replyJson);
       auto out = response.send(200, "OK", responseHeaders, content.size());
@@ -2677,11 +2683,13 @@ private:
   int numReceived; // numReceived is number of checks successfully received
   std::string radicalRemoteAddress; // azure address for radical remote consistency checks
   std::string instanceId; // azure instance id
+  std::string remoteStatusUri; // azure uri for querying status of remote
   std::map<std::string, std::map<std::string, std::string>> failedKeyValues; // json of failed keys and their values/versions
 
   // given a key and the local version number, check against global truth
   bool getConsistencyCheck(kj::StringPtr key, uint32_t local_version_number) {
     std::string remoteCheckUrl = radicalRemoteAddress + "/api/RemoteLifecycleEvent";
+    // TODO: need to replace hello-world
     std::string consistencyJson = R"({"RequestType": "ConsistencyCheck", "FunctionKey": "hello-world", "InstanceId": )";
     consistencyJson += "\"" + instanceId + "\", ";
     consistencyJson += R"("KeyVersions": {)";

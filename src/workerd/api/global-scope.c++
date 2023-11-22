@@ -286,6 +286,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
             std::string consistency_url("localhost:");
             consistency_url = consistency_url.append(std::to_string(port));
             std::string numReceived;
+            std::string remoteStatusUri;
 
             // want to get check results at least once, and then until it matches or has failed
             do {
@@ -353,21 +354,29 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                     auto req = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
                     kj::Promise<void> writePromise = req.body->write(currFailedValueText.begin(), currFailedValueText.size()).attach(kj::mv(currFailedValueText));
                     auto kvPutResult = writePromise.attach(kj::mv(req.body)).then([resp = kj::mv(req.response)]() mutable {
-                      return resp.then([](kj::HttpClient::Response&& response) mutable {
-                        return response.body->readAllBytes().attach(kj::mv(response.body)).ignoreResult();
+                      return resp.then([](kj::HttpClient::Response&& r) mutable {
+                        return r.body->readAllBytes().attach(kj::mv(r.body)).ignoreResult();
                       });
                     });
                     context.addWaitUntil(kj::mv(kvPutResult).attach(kj::mv(writePromise)));
 
                   }
                 }
+                else if(object[i].getName() == kj::str("statusQueryGetUri")) {
+                  remoteStatusUri = object[i].getValue().getString().cStr();
+                }
               }
 
               if(std::stoi(numReceived) < 0) {
                 // reset consistency service numReceived to 0
                 ::workerd::curlPost(consistency_url, "fakeKey", -1);
-                return context.addObject(kj::heap(addNoopDeferredProxy(
-                      response.sendError(500, "Austin Server Error", context.getHeaderTable()))));
+                return context.addObject(
+                  kj::heap(addNoopDeferredProxy(response.sendError(
+                    500,
+                    "Consistency Check failed; check remote status at: " + remoteStatusUri,
+                    context.getHeaderTable()
+                  )))
+                );
               }
             } while(numReceived != getCount);
 
