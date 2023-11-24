@@ -2627,9 +2627,16 @@ public:
 
       auto vn = std::stoi(std::string(versionNumber.cStr()));
 
-      // version number < 0 implies reset numReceived to 0
+      // version number < 0 implies reset numReceived to 0 and let durable function know we completed
       if (vn < 0) {
         numReceived = 0;
+
+        std::string remoteCheckUrl = radicalRemoteAddress + "/api/RemoteLifecycleEvent";
+        // TODO: need to replace hello-world
+        std::string completionJson = R"({"RequestType": "Completed", "FunctionKey": "hello-world", "InstanceId": )";
+        completionJson += "\"" + instanceId + "\"}";
+        ::workerd::curlPostJson(remoteCheckUrl, completionJson);
+
         auto content = kj::str("");
         auto out = response.send(200, "OK", responseHeaders, content.size());
         co_return co_await out->write(content.begin(), content.size());
