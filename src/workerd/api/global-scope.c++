@@ -369,9 +369,9 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               if(std::stoi(numReceived) < 0) {
                 // reset consistency service numReceived to 0
                 ::workerd::curlPost(consistency_url, "fakeKey", -1);
-                return kvPutResult.then([]() mutable {
+                return kvPutResult.then([&]() mutable {
                   auto& context = IoContext::current();
-                  context.addObject(
+                  return context.addObject(
                     kj::heap(addNoopDeferredProxy(response.sendError(
                       500,
                       "Consistency Check failed; check remote status at: " + remoteStatusUri + "\n",
