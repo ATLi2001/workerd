@@ -309,71 +309,73 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                   // reset consistency service numReceived to 0
                   ::workerd::curlPost(consistency_url, "fakeKey", -1);
 
-                  // extract failedKeys
-                  for(int i = 0; i < objSize; ++i) {
-                    if(object[i].getName() == kj::str("failedKeyValues")) {
-                      KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
-                      auto failedKeyValuesObj = object[i].getValue().getObject();
-                      auto numFailedKeys = failedKeyValuesObj.size();
-                      // for each failed key
-                      kj::ArrayBuilder<kj::Promise<void>> builder = kj::heapArrayBuilder<kj::Promise<void>>(numFailedKeys);
-                      for(int j = 0; j < numFailedKeys; ++j) {
-                        auto currFailedKey = failedKeyValuesObj[j].getName();
-                        KJ_ASSERT(failedKeyValuesObj[j].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[j].getValue().which());
-                        auto currFailedValue = failedKeyValuesObj[j].getValue().getObject();
-                        auto currFailedValueSize = currFailedValue.size();
-                        // extract the correct version and value
-                        std::string correctValue;
-                        int correctVersion;
-                        for(int k = 0; k < currFailedValueSize; ++k) {
-                          if(currFailedValue[k].getName() == kj::str("value")) {
-                            correctValue = currFailedValue[k].getValue().getString().cStr();
+                  return js.evalNow([&] {
+                    // extract failedKeys
+                    for(int i = 0; i < objSize; ++i) {
+                      if(object[i].getName() == kj::str("failedKeyValues")) {
+                        KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
+                        auto failedKeyValuesObj = object[i].getValue().getObject();
+                        auto numFailedKeys = failedKeyValuesObj.size();
+                        // for each failed key
+                        kj::ArrayBuilder<kj::Promise<void>> builder = kj::heapArrayBuilder<kj::Promise<void>>(numFailedKeys);
+                        for(int j = 0; j < numFailedKeys; ++j) {
+                          auto currFailedKey = failedKeyValuesObj[j].getName();
+                          KJ_ASSERT(failedKeyValuesObj[j].getValue().which() == capnp::JsonValue::OBJECT, (uint)failedKeyValuesObj[j].getValue().which());
+                          auto currFailedValue = failedKeyValuesObj[j].getValue().getObject();
+                          auto currFailedValueSize = currFailedValue.size();
+                          // extract the correct version and value
+                          std::string correctValue;
+                          int correctVersion;
+                          for(int k = 0; k < currFailedValueSize; ++k) {
+                            if(currFailedValue[k].getName() == kj::str("value")) {
+                              correctValue = currFailedValue[k].getValue().getString().cStr();
+                            }
+                            else if(currFailedValue[k].getName() == kj::str("version")) {
+                              correctVersion = currFailedValue[k].getValue().getNumber();
+                            }
                           }
-                          else if(currFailedValue[k].getName() == kj::str("version")) {
-                            correctVersion = currFailedValue[k].getValue().getNumber();
-                          }
-                        }
-                        std::string currFailedValueString = "{\"version\": " + std::to_string(correctVersion);
-                        currFailedValueString += ", value: \"" + correctValue + "\"}";
-                        auto currFailedValueText = kj::str(currFailedValueString);
-                        KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
-                        // TODO: call kv put
-                        // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
-                        kj::Url url;
-                        url.scheme = kj::str("https");
-                        url.host = kj::str("fake-host");
-                        url.path.add(kj::str(currFailedKey));
-                        url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
-                        auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
-                        KJ_DBG("pre kv put", urlStr);
-                        kj::HttpHeaders putHeaders(context.getHeaderTable());
-                        putHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT_STRING);
-                        putHeaders.add("CF-KV-FLPROD-405"_kj, urlStr);
-                        KJ_DBG("pre kv put", putHeaders);
-                        auto expectedBodySize = currFailedValueText.size();
-                        KJ_DBG("pre kv put", expectedBodySize);
-                        // subrequest channel is 2
-                        auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
-                        auto req = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
-                        kj::Promise<void> writePromise = req.body->write(currFailedValueText.begin(), currFailedValueText.size()).attach(kj::mv(currFailedValueText));
-                        auto kvPutResult = writePromise.attach(kj::mv(req.body)).then([resp = kj::mv(req.response)]() mutable {
-                          return resp.then([](kj::HttpClient::Response&& r) mutable {
-                            return r.body->readAllBytes().attach(kj::mv(r.body)).ignoreResult();
+                          std::string currFailedValueString = "{\"version\": " + std::to_string(correctVersion);
+                          currFailedValueString += ", value: \"" + correctValue + "\"}";
+                          auto currFailedValueText = kj::str(currFailedValueString);
+                          KJ_DBG("pre kv put", currFailedKey, currFailedValueText);
+                          // TODO: call kv put
+                          // ::workerd::api::KvNamespace::put(js, currFailedKey, currFailedValueText, )
+                          kj::Url url;
+                          url.scheme = kj::str("https");
+                          url.host = kj::str("fake-host");
+                          url.path.add(kj::str(currFailedKey));
+                          url.query.add(kj::Url::QueryParam { kj::str("urlencoded"), kj::str("true") });
+                          auto urlStr = url.toString(kj::Url::Context::HTTP_PROXY_REQUEST);
+                          KJ_DBG("pre kv put", urlStr);
+                          kj::HttpHeaders putHeaders(context.getHeaderTable());
+                          putHeaders.set(kj::HttpHeaderId::CONTENT_TYPE, MimeType::PLAINTEXT_STRING);
+                          putHeaders.add("CF-KV-FLPROD-405"_kj, urlStr);
+                          KJ_DBG("pre kv put", putHeaders);
+                          auto expectedBodySize = currFailedValueText.size();
+                          KJ_DBG("pre kv put", expectedBodySize);
+                          // subrequest channel is 2
+                          auto client = context.getHttpClient(2, true, kj::none, "kv_put"_kjc);
+                          auto req = client->request(kj::HttpMethod::PUT, urlStr, putHeaders, expectedBodySize);
+                          kj::Promise<void> writePromise = req.body->write(currFailedValueText.begin(), currFailedValueText.size()).attach(kj::mv(currFailedValueText));
+                          auto kvPutResult = writePromise.attach(kj::mv(req.body)).then([resp = kj::mv(req.response)]() mutable {
+                            return resp.then([](kj::HttpClient::Response&& r) mutable {
+                              return r.body->readAllBytes().attach(kj::mv(r.body)).ignoreResult();
+                            });
                           });
-                        });
 
-                        builder.add(kj::mv(kvPutResult));
+                          builder.add(kj::mv(kvPutResult));
+                        }
+
+                        auto promiseArray = kj::joinPromisesFailFast(builder.finish());
+
+                        return context.awaitIo(js, promiseArray.then([&]() mutable {
+                          auto initDict = Response::InitializerDict();
+                          initDict.status = 500;
+                          return Response::constructor(js, nullptr, kj::mv(initDict));
+                        }));
                       }
-
-                      auto promiseArray = kj::joinPromisesFailFast(builder.finish());
-
-                      return context.awaitIo(js, promiseArray.then([&]() mutable {
-                        auto initDict = Response::InitializerDict();
-                        initDict.status = 500;
-                        return Response::constructor(js, nullptr, kj::mv(initDict));
-                      }));
                     }
-                  }
+                  });
                 }
               } while(numReceived != getCount);
 
@@ -381,7 +383,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               ::workerd::curlPost(consistency_url, "fakeKey", -1);
             }
           }
-	  return js.resolvedPromise(kj::mv(innerResponse));
+          return js.resolvedPromise(kj::mv(innerResponse));
         }
       )
     )
