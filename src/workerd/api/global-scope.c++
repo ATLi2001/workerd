@@ -251,9 +251,8 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
     };
     auto canceled = kj::refcounted<RefcountedBool>(false);
 
-    return ioContext.awaitJs(lock, promise.then(
-      kj::implicitCast<jsg::Lock&>(lock),
-      ioContext.addFunctor(
+    return ioContext.awaitJs(lock, promise.then(kj::implicitCast<jsg::Lock&>(lock),
+	      ioContext.addFunctor(
         [&headers] (jsg::Lock& js, jsg::Ref<Response> innerResponse) mutable {
           auto& context = IoContext::current();
 
@@ -368,11 +367,11 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 
                       auto promiseArray = kj::joinPromisesFailFast(builder.finish());
 
-                      return promiseArray.then([]() mutable {
+                      return context.awaitIo(js, promiseArray.then([&]() mutable {
                         auto initDict = Response::InitializerDict();
                         initDict.status = 500;
-                        return Response::constructor(js, nullptr, &initDict);
-                      });
+                        return Response::constructor(js, nullptr, kj::mv(initDict));
+                      }));
                     }
                   }
                 }
@@ -382,8 +381,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
               ::workerd::curlPost(consistency_url, "fakeKey", -1);
             }
           }
-
-          return innerResponse;
+	  return js.resolvedPromise(kj::mv(innerResponse));
         }
       )
     )
