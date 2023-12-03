@@ -363,15 +363,13 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                           });
                         });
 
-                        builder.add(kvPutResult);
+                        builder.add(kj::mv(kvPutResult));
                       }
 
-                      auto kvPutPromises = builder.finish();
-
-                      auto promiseArray = kj::joinPromisesFailFast(kj::mv(kvPutPromises));
+                      auto promiseArray = kj::joinPromisesFailFast(builder.finish());
 
                       promiseArray.then([]() mutable {
-                        return nullptr;
+                        return jsg::Ref<Reference>();
                       });
                     }
                   }
@@ -390,7 +388,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
     .then(kj::implicitCast<jsg::Lock&>(lock),
       ioContext.addFunctor(
           [&response, allowWebSocket = headers.isWebSocket(),
-            canceled = kj::addRef(*canceled), span = kj::mv(span)]
+            canceled = kj::addRef(*canceled), &headers, span = kj::mv(span)]
           (jsg::Lock& js, jsg::Ref<Response> innerResponse) mutable
           -> IoOwn<kj::Promise<DeferredProxy<void>>> {
         auto& context = IoContext::current();
@@ -403,7 +401,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         }
         else {
           // consistency check failed
-          if (innerResponse == nullptr) {
+          if (innerResponse == jsg::Ref<Response>()) {
             return context.addObject(
               kj::heap(addNoopDeferredProxy(response.sendError(
                 500,
