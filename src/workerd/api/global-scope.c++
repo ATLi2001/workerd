@@ -309,10 +309,10 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                   // reset consistency service numReceived to 0
                   ::workerd::curlPost(consistency_url, "fakeKey", -1);
 
-                  return js.evalNow([&] {
-                    // extract failedKeys
-                    for(int i = 0; i < objSize; ++i) {
-                      if(object[i].getName() == kj::str("failedKeyValues")) {
+                  // extract failedKeys
+                  for(int i = 0; i < objSize; ++i) {
+                    if(object[i].getName() == kj::str("failedKeyValues")) {
+                      return js.evalNow([&] {
                         KJ_ASSERT(object[i].getValue().which() == capnp::JsonValue::OBJECT, (uint)object[i].getValue().which());
                         auto failedKeyValuesObj = object[i].getValue().getObject();
                         auto numFailedKeys = failedKeyValuesObj.size();
@@ -373,9 +373,9 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
                           initDict.status = 500;
                           return Response::constructor(js, nullptr, kj::mv(initDict));
                         }));
-                      }
+                      });
                     }
-                  });
+                  }
                 }
               } while(numReceived != getCount);
 
