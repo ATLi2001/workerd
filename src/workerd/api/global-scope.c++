@@ -368,8 +368,10 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
 
                       auto promiseArray = kj::joinPromisesFailFast(builder.finish());
 
-                      promiseArray.then([]() mutable {
-                        return jsg::Ref<Reference>();
+                      return promiseArray.then([]() mutable {
+                        auto initDict = Response::InitializerDict();
+                        initDict.status = 500;
+                        return Response::constructor(js, nullptr, &initDict);
                       });
                     }
                   }
@@ -401,7 +403,7 @@ kj::Promise<DeferredProxy<void>> ServiceWorkerGlobalScope::request(
         }
         else {
           // consistency check failed
-          if (innerResponse == jsg::Ref<Response>()) {
+          if (innerResponse->getStatus() == 500) {
             return context.addObject(
               kj::heap(addNoopDeferredProxy(response.sendError(
                 500,
